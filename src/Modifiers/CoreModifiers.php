@@ -1,0 +1,482 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Bugo\Antlers\Modifiers;
+
+use Bugo\Antlers\Runtime\ValueResult;
+use Bugo\Antlers\Support\MarkdownRenderer;
+use Symfony\Component\String\Slugger\AsciiSlugger;
+use Symfony\Component\String\UnicodeString;
+
+/**
+ * Registers all built-in Antlers modifiers.
+ */
+final class CoreModifiers
+{
+    public static function register(ModifierRegistry $registry): void
+    {
+        $registry->register('upper', fn(mixed $v): string => self::unicode($v)->upper()->toString());
+
+        $registry->register('lower', fn(mixed $v): string => self::unicode($v)->lower()->toString());
+
+        $registry->register('ucfirst', fn(mixed $v): string => self::ucfirst(self::string($v)));
+
+        $registry->register('lcfirst', fn(mixed $v): string => self::lcfirst(self::string($v)));
+
+        $registry->register('title', fn(mixed $v): string => self::unicode($v)->title(true)->toString());
+
+        $registry->register('trim', fn(mixed $v, array $p): string
+            => trim(self::string($v), self::string($p[0] ?? " \t\n\r\0\x0B")));
+
+        $registry->register('reverse', function (mixed $v): array|string {
+            if (is_array($v)) {
+                return array_reverse($v);
+            }
+
+            return self::unicode($v)->reverse()->toString();
+        });
+
+        $registry->register('length', function (mixed $v): int {
+            if (is_array($v)) {
+                return count($v);
+            }
+
+            return self::unicode($v)->length();
+        });
+
+        $registry->register('count', function (mixed $v): int {
+            if (is_array($v)) {
+                return count($v);
+            }
+
+            if (is_string($v)) {
+                return self::unicode($v)->length();
+            }
+
+            return 0;
+        });
+
+        $registry->register('word_count', fn(mixed $v): int => self::wordCount(self::string($v)));
+
+        $registry->register('slugify', function (mixed $v, array $p): string {
+            $sep = self::string($p[0] ?? '-');
+
+            return self::slugger()
+                ->slug(self::string($v), $sep)
+                ->lower()
+                ->toString();
+        });
+
+        $registry->register('snake', fn(mixed $v): string => self::unicode($v)->snake()->toString());
+
+        $registry->register('studly', fn(mixed $v): string => self::unicode($v)->pascal()->toString());
+
+        $registry->register('kebab', fn(mixed $v): string => self::unicode($v)->kebab()->toString());
+
+        $registry->register('truncate', function (mixed $v, array $p): string {
+            $limit  = self::int($p[0] ?? 100);
+            $append = self::string($p[1] ?? '...');
+            $str    = self::string($v);
+
+            if (self::unicode($str)->length() <= $limit) {
+                return $str;
+            }
+
+            return self::unicode($str)->slice(0, $limit)->toString() . $append;
+        });
+
+        $registry->register('limit', function (mixed $v, array $p): array|string {
+            $limit = self::int($p[0] ?? 100);
+
+            if (is_array($v)) {
+                return array_slice($v, 0, $limit);
+            }
+
+            return self::unicode($v)->slice(0, $limit)->toString();
+        });
+
+        $registry->register('replace', fn(mixed $v, array $p): string
+            => str_replace(self::string($p[0] ?? ''), self::string($p[1] ?? ''), self::string($v)));
+
+        $registry->register('regex_replace', function (mixed $v, array $p): ?string {
+            $pattern = self::string($p[0] ?? '');
+            if ($pattern === '') {
+                return self::string($v);
+            }
+
+            return preg_replace($pattern, self::string($p[1] ?? ''), self::string($v));
+        });
+
+        $registry->register('nl2br', fn(mixed $v): string => nl2br(self::string($v)));
+
+        $registry->register('strip_tags', fn(mixed $v, array $p): string
+            => strip_tags(self::string($v), isset($p[0]) ? self::string($p[0]) : null));
+
+        $registry->register('entities', fn(mixed $v): string
+            => htmlspecialchars(self::string($v), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+        $registry->register('sanitize', fn(mixed $v): string
+            => htmlspecialchars(self::string($v), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+        $registry->register('decode', fn(mixed $v): string
+            => htmlspecialchars_decode(self::string($v), ENT_QUOTES | ENT_HTML5));
+
+        $registry->register('markdown', fn(mixed $v): string => MarkdownRenderer::render(self::string($v)));
+
+        $registry->register('wrap', function (mixed $v, array $p): string {
+            $tag = self::string($p[0] ?? 'span');
+
+            return "<$tag>" . self::string($v) . "</$tag>";
+        });
+
+        $registry->register('surround', function (mixed $v, array $p): string {
+            $before = self::string($p[0] ?? '');
+            $after  = self::string($p[1] ?? $before);
+
+            return $before . self::string($v) . $after;
+        });
+
+        $registry->register('add', fn(mixed $v, array $p): float
+            => self::float($v) + self::float($p[0] ?? 0));
+
+        $registry->register('subtract', fn(mixed $v, array $p): float
+            => self::float($v) - self::float($p[0] ?? 0));
+
+        $registry->register('multiply', fn(mixed $v, array $p): float
+            => self::float($v) * self::float($p[0] ?? 1));
+
+        $registry->register('divide', function (mixed $v, array $p): float|int {
+            $divisor = self::float($p[0] ?? 1);
+
+            return $divisor !== 0.0 ? self::float($v) / $divisor : 0;
+        });
+
+        $registry->register('mod', fn(mixed $v, array $p): int => self::int($v) % self::int($p[0] ?? 1));
+
+        $registry->register('ceil', fn(mixed $v): int => (int) ceil(self::float($v)));
+
+        $registry->register('floor', fn(mixed $v): int => (int) floor(self::float($v)));
+
+        $registry->register('round', fn(mixed $v, array $p): float
+            => round(self::float($v), self::int($p[0] ?? 0)));
+
+        $registry->register('sort', function (mixed $v, array $p): mixed {
+            if (! is_array($v)) {
+                return $v;
+            }
+
+            $key = isset($p[0]) ? self::string($p[0]) : null;
+            if ($key !== null) {
+                usort($v, static fn(mixed $a, mixed $b): int => (is_array($a) ? ($a[$key] ?? null) : null)
+                    <=> (is_array($b) ? ($b[$key] ?? null) : null));
+
+                return $v;
+            }
+
+            sort($v);
+
+            return $v;
+        });
+
+        $registry->register('first', function (mixed $v, array $p): mixed {
+            if (is_array($v)) {
+                $n = self::int($p[0] ?? 1);
+
+                return $n === 1 ? ($v[0] ?? null) : array_slice($v, 0, $n);
+            }
+
+            return $v;
+        });
+
+        $registry->register('last', function (mixed $v, array $p): mixed {
+            if (is_array($v)) {
+                $n = self::int($p[0] ?? 1);
+                if ($n === 1) {
+                    return self::lastValue($v);
+                }
+
+                return array_slice($v, -$n);
+            }
+
+            return $v;
+        });
+
+        $registry->register('pluck', function (mixed $v, array $p): mixed {
+            if (! is_array($v) || $p === []) {
+                return $v;
+            }
+
+            $key = self::parameterKey($p);
+
+            return array_map(
+                static fn(mixed $item): mixed => is_array($item) ? ($item[$key] ?? null) : null,
+                $v,
+            );
+        });
+
+        $registry->register('unique', function (mixed $v): mixed {
+            if (! is_array($v)) {
+                return $v;
+            }
+
+            return self::uniqueValues($v);
+        });
+
+        $registry->register('flatten', function (mixed $v): array {
+            $result = [];
+
+            $arr = (array) $v;
+            array_walk_recursive($arr, function (mixed $item) use (&$result): void {
+                $result = array_merge($result, [$item]);
+            });
+
+            return $result;
+        });
+
+        $registry->register('keys', fn(mixed $v): array => is_array($v) ? array_keys($v) : []);
+
+        $registry->register('values', fn(mixed $v): array => is_array($v) ? array_values($v) : []);
+
+        $registry->register('where', function (mixed $v, array $p): mixed {
+            if (! is_array($v) || count($p) < 2) {
+                return $v;
+            }
+
+            $key   = self::parameterKey($p);
+            $value = new ValueResult($p[1] ?? null);
+
+            return array_values(array_filter(
+                $v,
+                static fn(mixed $item): bool => is_array($item) && ($item[$key] ?? null) == $value->value,
+            ));
+        });
+
+        $registry->register('chunk', function (mixed $v, array $p): mixed {
+            if (! is_array($v)) {
+                return $v;
+            }
+
+            $size = max(1, self::int($p[0] ?? 2));
+
+            return array_chunk($v, $size);
+        });
+
+        $registry->register('join', function (mixed $v, array $p): string {
+            if (! is_array($v)) {
+                return self::string($v);
+            }
+
+            $glue  = self::string($p[0] ?? ', ');
+            $parts = array_map(self::string(...), $v);
+
+            return implode($glue, $parts);
+        });
+
+        $registry->register('explode', function (mixed $v, array $p): array {
+            $sep = self::string($p[0] ?? ',');
+
+            return explode($sep !== '' ? $sep : ',', self::string($v));
+        });
+
+        $registry->register('is_empty', fn(mixed $v): bool => empty($v));
+
+        $registry->register('is_array', fn(mixed $v): bool => is_array($v));
+
+        $registry->register('is_numeric', fn(mixed $v): bool => is_numeric($v));
+
+        $registry->register('md5', fn(mixed $v): string => md5(self::string($v)));
+
+        $registry->register('format', function (mixed $v, array $p): string {
+            $format = self::string($p[0] ?? 'Y-m-d');
+            if (is_numeric($v)) {
+                return date($format, self::int($v));
+            }
+
+            $stringValue = self::string($v);
+            $ts          = strtotime($stringValue);
+
+            return $ts !== false ? date($format, $ts) : $stringValue;
+        });
+
+        $registry->register('starts_with', fn(mixed $v, array $p): bool
+            => str_starts_with(self::string($v), self::string($p[0] ?? '')));
+
+        $registry->register('ends_with', fn(mixed $v, array $p): bool
+            => str_ends_with(self::string($v), self::string($p[0] ?? '')));
+
+        $registry->register('contains', fn(mixed $v, array $p): bool
+            => str_contains(self::string($v), self::string($p[0] ?? '')));
+
+        $registry->register('repeat', fn(mixed $v, array $p): string
+            => self::unicode($v)->repeat(self::int($p[0] ?? 1))->toString());
+
+        $registry->register('pad', function (mixed $v, array $p): string {
+            $len  = self::int($p[0] ?? 0);
+            $char = self::string($p[1] ?? ' ');
+            $dir  = self::string($p[2] ?? 'right');
+
+            return match ($dir) {
+                'left'  => self::unicode($v)->padStart($len, $char)->toString(),
+                'both'  => self::unicode($v)->padBoth($len, $char)->toString(),
+                default => self::unicode($v)->padEnd($len, $char)->toString(),
+            };
+        });
+    }
+
+    private static function unicode(mixed $value): UnicodeString
+    {
+        return new UnicodeString(self::string($value));
+    }
+
+    private static function slugger(): AsciiSlugger
+    {
+        static $slugger = null;
+
+        if (! $slugger instanceof AsciiSlugger) {
+            $slugger = new AsciiSlugger();
+        }
+
+        return $slugger;
+    }
+
+    private static function ucfirst(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        return self::unicode($value)
+            ->title(true)
+            ->slice(0, 1)
+            ->append(self::unicode($value)->slice(1)->toString())
+            ->toString();
+    }
+
+    private static function lcfirst(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        return self::unicode($value)
+            ->lower()
+            ->slice(0, 1)
+            ->append(self::unicode($value)->slice(1)->toString())
+            ->toString();
+    }
+
+    private static function wordCount(string $value): int
+    {
+        preg_match_all('/[\p{L}\p{N}]+(?:[\'’-][\p{L}\p{N}]+)*/u', $value, $matches);
+
+        return count($matches[0]);
+    }
+
+    private static function string(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_scalar($value)) {
+            return (string) $value;
+        }
+
+        if (is_object($value) && method_exists($value, '__toString')) {
+            return (string) $value;
+        }
+
+        return '';
+    }
+
+    private static function int(mixed $value): int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+
+        if (is_float($value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && is_numeric($value)) {
+            return (int) $value;
+        }
+
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+
+        return 0;
+    }
+
+    private static function float(mixed $value): float
+    {
+        if (is_int($value) || is_float($value)) {
+            return (float) $value;
+        }
+
+        if (is_string($value) && is_numeric($value)) {
+            return (float) $value;
+        }
+
+        if (is_bool($value)) {
+            return $value ? 1.0 : 0.0;
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * @param array<array-key, mixed> $values
+     */
+    private static function lastValue(array $values): mixed
+    {
+        $slice = array_slice($values, -1);
+
+        return $slice === [] ? null : $slice[0];
+    }
+
+    /**
+     * @param array<array-key, mixed> $params
+     */
+    private static function parameterKey(array $params): int|string
+    {
+        return isset($params[0]) && is_int($params[0])
+            ? $params[0]
+            : self::string($params[0] ?? null);
+    }
+
+    /**
+     * @param array<array-key, mixed> $values
+     * @return list<mixed>
+     */
+    private static function uniqueValues(array $values): array
+    {
+        /** @var list<mixed> $result */
+        $result = [];
+        $seen   = [];
+
+        array_walk($values, static function (mixed $value) use (&$result, &$seen): void {
+            $hash = self::uniqueHash($value);
+            if (isset($seen[$hash])) {
+                return;
+            }
+
+            $seen[$hash] = true;
+            $result       = array_merge($result, [$value]);
+        });
+
+        return $result;
+    }
+
+    private static function uniqueHash(mixed $value): string
+    {
+        if (is_object($value)) {
+            return 'object:' . spl_object_hash($value);
+        }
+
+        return 'value:' . serialize($value);
+    }
+}
