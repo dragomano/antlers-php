@@ -46,7 +46,8 @@ it('provides count in for loop', function (): void {
 });
 
 it('handles for loop with zero items', function (): void {
-    expect(engine()->render('{{ foreach items as item }}{{ item }}{{ /foreach }}', ['items' => []]))->toBe('');
+    expect(engine()->render('{{ foreach items as item }}{{ item }}{{ /foreach }}', ['items' => []]))
+        ->toBe('');
 });
 
 it('handles paired variable tag iterating array', function (): void {
