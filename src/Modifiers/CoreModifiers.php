@@ -16,20 +16,20 @@ final class CoreModifiers
 {
     public static function register(ModifierRegistry $registry): void
     {
-        $registry->register('upper', fn(mixed $v): string => self::unicode($v)->upper()->toString());
+        $registry->register('upper', static fn(mixed $v): string => self::unicode($v)->upper()->toString());
 
-        $registry->register('lower', fn(mixed $v): string => self::unicode($v)->lower()->toString());
+        $registry->register('lower', static fn(mixed $v): string => self::unicode($v)->lower()->toString());
 
-        $registry->register('ucfirst', fn(mixed $v): string => self::ucfirst(self::string($v)));
+        $registry->register('ucfirst', static fn(mixed $v): string => self::ucfirst(self::string($v)));
 
-        $registry->register('lcfirst', fn(mixed $v): string => self::lcfirst(self::string($v)));
+        $registry->register('lcfirst', static fn(mixed $v): string => self::lcfirst(self::string($v)));
 
-        $registry->register('title', fn(mixed $v): string => self::unicode($v)->title(true)->toString());
+        $registry->register('title', static fn(mixed $v): string => self::unicode($v)->title(true)->toString());
 
-        $registry->register('trim', fn(mixed $v, array $p): string
+        $registry->register('trim', static fn(mixed $v, array $p): string
             => trim(self::string($v), self::string($p[0] ?? " \t\n\r\0\x0B")));
 
-        $registry->register('reverse', function (mixed $v): array|string {
+        $registry->register('reverse', static function (mixed $v): array|string {
             if (is_array($v)) {
                 return array_reverse($v);
             }
@@ -37,7 +37,7 @@ final class CoreModifiers
             return self::unicode($v)->reverse()->toString();
         });
 
-        $registry->register('length', function (mixed $v): int {
+        $registry->register('length', static function (mixed $v): int {
             if (is_array($v)) {
                 return count($v);
             }
@@ -45,7 +45,7 @@ final class CoreModifiers
             return self::unicode($v)->length();
         });
 
-        $registry->register('count', function (mixed $v): int {
+        $registry->register('count', static function (mixed $v): int {
             if (is_array($v)) {
                 return count($v);
             }
@@ -57,9 +57,9 @@ final class CoreModifiers
             return 0;
         });
 
-        $registry->register('word_count', fn(mixed $v): int => self::wordCount(self::string($v)));
+        $registry->register('word_count', static fn(mixed $v): int => self::wordCount(self::string($v)));
 
-        $registry->register('slugify', function (mixed $v, array $p): string {
+        $registry->register('slugify', static function (mixed $v, array $p): string {
             $sep = self::string($p[0] ?? '-');
 
             return self::slugger()
@@ -68,13 +68,13 @@ final class CoreModifiers
                 ->toString();
         });
 
-        $registry->register('snake', fn(mixed $v): string => self::unicode($v)->snake()->toString());
+        $registry->register('snake', static fn(mixed $v): string => self::unicode($v)->snake()->toString());
 
-        $registry->register('studly', fn(mixed $v): string => self::unicode($v)->pascal()->toString());
+        $registry->register('studly', static fn(mixed $v): string => self::unicode($v)->pascal()->toString());
 
-        $registry->register('kebab', fn(mixed $v): string => self::unicode($v)->kebab()->toString());
+        $registry->register('kebab', static fn(mixed $v): string => self::unicode($v)->kebab()->toString());
 
-        $registry->register('truncate', function (mixed $v, array $p): string {
+        $registry->register('truncate', static function (mixed $v, array $p): string {
             $limit  = self::int($p[0] ?? 100);
             $append = self::string($p[1] ?? '...');
             $str    = self::string($v);
@@ -86,7 +86,7 @@ final class CoreModifiers
             return self::unicode($str)->slice(0, $limit)->toString() . $append;
         });
 
-        $registry->register('limit', function (mixed $v, array $p): array|string {
+        $registry->register('limit', static function (mixed $v, array $p): array|string {
             $limit = self::int($p[0] ?? 100);
 
             if (is_array($v)) {
@@ -96,10 +96,10 @@ final class CoreModifiers
             return self::unicode($v)->slice(0, $limit)->toString();
         });
 
-        $registry->register('replace', fn(mixed $v, array $p): string
+        $registry->register('replace', static fn(mixed $v, array $p): string
             => str_replace(self::string($p[0] ?? ''), self::string($p[1] ?? ''), self::string($v)));
 
-        $registry->register('regex_replace', function (mixed $v, array $p): ?string {
+        $registry->register('regex_replace', static function (mixed $v, array $p): ?string {
             $pattern = self::string($p[0] ?? '');
             if ($pattern === '') {
                 return self::string($v);
@@ -108,60 +108,60 @@ final class CoreModifiers
             return preg_replace($pattern, self::string($p[1] ?? ''), self::string($v));
         });
 
-        $registry->register('nl2br', fn(mixed $v): string => nl2br(self::string($v)));
+        $registry->register('nl2br', static fn(mixed $v): string => nl2br(self::string($v)));
 
-        $registry->register('strip_tags', fn(mixed $v, array $p): string
+        $registry->register('strip_tags', static fn(mixed $v, array $p): string
             => strip_tags(self::string($v), isset($p[0]) ? self::string($p[0]) : null));
 
-        $registry->register('entities', fn(mixed $v): string
+        $registry->register('entities', static fn(mixed $v): string
             => htmlspecialchars(self::string($v), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
 
-        $registry->register('sanitize', fn(mixed $v): string
+        $registry->register('sanitize', static fn(mixed $v): string
             => htmlspecialchars(self::string($v), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
 
-        $registry->register('decode', fn(mixed $v): string
+        $registry->register('decode', static fn(mixed $v): string
             => htmlspecialchars_decode(self::string($v), ENT_QUOTES | ENT_HTML5));
 
-        $registry->register('markdown', fn(mixed $v): string => MarkdownRenderer::render(self::string($v)));
+        $registry->register('markdown', static fn(mixed $v): string => MarkdownRenderer::render(self::string($v)));
 
-        $registry->register('wrap', function (mixed $v, array $p): string {
+        $registry->register('wrap', static function (mixed $v, array $p): string {
             $tag = self::string($p[0] ?? 'span');
 
             return "<$tag>" . self::string($v) . "</$tag>";
         });
 
-        $registry->register('surround', function (mixed $v, array $p): string {
+        $registry->register('surround', static function (mixed $v, array $p): string {
             $before = self::string($p[0] ?? '');
             $after  = self::string($p[1] ?? $before);
 
             return $before . self::string($v) . $after;
         });
 
-        $registry->register('add', fn(mixed $v, array $p): float
+        $registry->register('add', static fn(mixed $v, array $p): float
             => self::float($v) + self::float($p[0] ?? 0));
 
-        $registry->register('subtract', fn(mixed $v, array $p): float
+        $registry->register('subtract', static fn(mixed $v, array $p): float
             => self::float($v) - self::float($p[0] ?? 0));
 
-        $registry->register('multiply', fn(mixed $v, array $p): float
+        $registry->register('multiply', static fn(mixed $v, array $p): float
             => self::float($v) * self::float($p[0] ?? 1));
 
-        $registry->register('divide', function (mixed $v, array $p): float|int {
+        $registry->register('divide', static function (mixed $v, array $p): float|int {
             $divisor = self::float($p[0] ?? 1);
 
             return $divisor !== 0.0 ? self::float($v) / $divisor : 0;
         });
 
-        $registry->register('mod', fn(mixed $v, array $p): int => self::int($v) % self::int($p[0] ?? 1));
+        $registry->register('mod', static fn(mixed $v, array $p): int => self::int($v) % self::int($p[0] ?? 1));
 
-        $registry->register('ceil', fn(mixed $v): int => (int) ceil(self::float($v)));
+        $registry->register('ceil', static fn(mixed $v): int => (int) ceil(self::float($v)));
 
-        $registry->register('floor', fn(mixed $v): int => (int) floor(self::float($v)));
+        $registry->register('floor', static fn(mixed $v): int => (int) floor(self::float($v)));
 
-        $registry->register('round', fn(mixed $v, array $p): float
+        $registry->register('round', static fn(mixed $v, array $p): float
             => round(self::float($v), self::int($p[0] ?? 0)));
 
-        $registry->register('sort', function (mixed $v, array $p): mixed {
+        $registry->register('sort', static function (mixed $v, array $p): mixed {
             if (! is_array($v)) {
                 return $v;
             }
@@ -179,7 +179,7 @@ final class CoreModifiers
             return $v;
         });
 
-        $registry->register('first', function (mixed $v, array $p): mixed {
+        $registry->register('first', static function (mixed $v, array $p): mixed {
             if (is_array($v)) {
                 $n = self::int($p[0] ?? 1);
 
@@ -189,7 +189,7 @@ final class CoreModifiers
             return $v;
         });
 
-        $registry->register('last', function (mixed $v, array $p): mixed {
+        $registry->register('last', static function (mixed $v, array $p): mixed {
             if (is_array($v)) {
                 $n = self::int($p[0] ?? 1);
                 if ($n === 1) {
@@ -202,7 +202,7 @@ final class CoreModifiers
             return $v;
         });
 
-        $registry->register('pluck', function (mixed $v, array $p): mixed {
+        $registry->register('pluck', static function (mixed $v, array $p): mixed {
             if (! is_array($v) || $p === []) {
                 return $v;
             }
@@ -215,7 +215,7 @@ final class CoreModifiers
             );
         });
 
-        $registry->register('unique', function (mixed $v): mixed {
+        $registry->register('unique', static function (mixed $v): mixed {
             if (! is_array($v)) {
                 return $v;
             }
@@ -223,22 +223,22 @@ final class CoreModifiers
             return self::uniqueValues($v);
         });
 
-        $registry->register('flatten', function (mixed $v): array {
+        $registry->register('flatten', static function (mixed $v): array {
             $result = [];
 
             $arr = (array) $v;
-            array_walk_recursive($arr, function (mixed $item) use (&$result): void {
+            array_walk_recursive($arr, static function (mixed $item) use (&$result): void {
                 $result = array_merge($result, [$item]);
             });
 
             return $result;
         });
 
-        $registry->register('keys', fn(mixed $v): array => is_array($v) ? array_keys($v) : []);
+        $registry->register('keys', static fn(mixed $v): array => is_array($v) ? array_keys($v) : []);
 
-        $registry->register('values', fn(mixed $v): array => is_array($v) ? array_values($v) : []);
+        $registry->register('values', static fn(mixed $v): array => is_array($v) ? array_values($v) : []);
 
-        $registry->register('where', function (mixed $v, array $p): mixed {
+        $registry->register('where', static function (mixed $v, array $p): mixed {
             if (! is_array($v) || count($p) < 2) {
                 return $v;
             }
@@ -252,7 +252,7 @@ final class CoreModifiers
             ));
         });
 
-        $registry->register('chunk', function (mixed $v, array $p): mixed {
+        $registry->register('chunk', static function (mixed $v, array $p): mixed {
             if (! is_array($v)) {
                 return $v;
             }
@@ -262,7 +262,7 @@ final class CoreModifiers
             return array_chunk($v, $size);
         });
 
-        $registry->register('join', function (mixed $v, array $p): string {
+        $registry->register('join', static function (mixed $v, array $p): string {
             if (! is_array($v)) {
                 return self::string($v);
             }
@@ -273,21 +273,21 @@ final class CoreModifiers
             return implode($glue, $parts);
         });
 
-        $registry->register('explode', function (mixed $v, array $p): array {
+        $registry->register('explode', static function (mixed $v, array $p): array {
             $sep = self::string($p[0] ?? ',');
 
             return explode($sep !== '' ? $sep : ',', self::string($v));
         });
 
-        $registry->register('is_empty', fn(mixed $v): bool => empty($v));
+        $registry->register('is_empty', static fn(mixed $v): bool => empty($v));
 
-        $registry->register('is_array', fn(mixed $v): bool => is_array($v));
+        $registry->register('is_array', static fn(mixed $v): bool => is_array($v));
 
-        $registry->register('is_numeric', fn(mixed $v): bool => is_numeric($v));
+        $registry->register('is_numeric', static fn(mixed $v): bool => is_numeric($v));
 
-        $registry->register('md5', fn(mixed $v): string => md5(self::string($v)));
+        $registry->register('md5', static fn(mixed $v): string => md5(self::string($v)));
 
-        $registry->register('format', function (mixed $v, array $p): string {
+        $registry->register('format', static function (mixed $v, array $p): string {
             $format = self::string($p[0] ?? 'Y-m-d');
             if (is_numeric($v)) {
                 return date($format, self::int($v));
@@ -299,19 +299,19 @@ final class CoreModifiers
             return $ts !== false ? date($format, $ts) : $stringValue;
         });
 
-        $registry->register('starts_with', fn(mixed $v, array $p): bool
+        $registry->register('starts_with', static fn(mixed $v, array $p): bool
             => str_starts_with(self::string($v), self::string($p[0] ?? '')));
 
-        $registry->register('ends_with', fn(mixed $v, array $p): bool
+        $registry->register('ends_with', static fn(mixed $v, array $p): bool
             => str_ends_with(self::string($v), self::string($p[0] ?? '')));
 
-        $registry->register('contains', fn(mixed $v, array $p): bool
+        $registry->register('contains', static fn(mixed $v, array $p): bool
             => str_contains(self::string($v), self::string($p[0] ?? '')));
 
-        $registry->register('repeat', fn(mixed $v, array $p): string
+        $registry->register('repeat', static fn(mixed $v, array $p): string
             => self::unicode($v)->repeat(self::int($p[0] ?? 1))->toString());
 
-        $registry->register('pad', function (mixed $v, array $p): string {
+        $registry->register('pad', static function (mixed $v, array $p): string {
             $len  = self::int($p[0] ?? 0);
             $char = self::string($p[1] ?? ' ');
             $dir  = self::string($p[2] ?? 'right');
