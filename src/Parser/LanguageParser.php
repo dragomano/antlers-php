@@ -35,6 +35,7 @@ final class LanguageParser
 
     /** @var Token[] */
     private array $tokens = [];
+
     private int $pos = 0;
 
     public function __construct()
@@ -392,32 +393,127 @@ final class LanguageParser
         $this->tokens = $this->lexer->tokenize($input);
         $this->pos    = 0;
 
-        $expr = $this->parseExpr(0);
+        return $this->parsePipedExpression();
+    }
 
-        // After parsing expression, check for pipe (modifier chain)
+    private function parsePipedExpression(): AbstractNode
+    {
+        $expr = $this->parseTernaryExpression();
+
         if ($this->peek()->is(TokenType::Pipe)) {
-            $expr = $this->parseModifierChain($expr);
-        }
-
-        // Check for ternary
-        if ($this->peek()->is(TokenType::Question)) {
-            $this->consume(TokenType::Question);
-
-            $trueBranch = $this->parseExpr(0);
-
-            $this->consume(TokenType::Colon);
-
-            $falseBranch = $this->parseExpr(0);
-
-            $expr = new TernaryNode($expr, $trueBranch, $falseBranch);
-
-            // May still have modifier chain after ternary
-            if ($this->peek()->is(TokenType::Pipe)) {
-                $expr = $this->parseModifierChain($expr);
-            }
+            return $this->parseModifierChain($expr);
         }
 
         return $expr;
+    }
+
+    private function parseTernaryExpression(): AbstractNode
+    {
+        $expr = $this->parseExpr(0);
+
+        if (! $this->peek()->is(TokenType::Question)) {
+            return $expr;
+        }
+
+        $this->consume(TokenType::Question);
+
+        $trueBranch = $this->parseTokenSlice($this->collectTernaryBranchTokens());
+
+        $this->consume(TokenType::Colon);
+
+        $falseBranch = $this->parsePipedExpression();
+
+        return new TernaryNode($expr, $trueBranch, $falseBranch);
+    }
+
+    /**
+     * @return Token[]
+     */
+    private function collectTernaryBranchTokens(): array
+    {
+        $start        = $this->pos;
+        $cursor       = $this->pos;
+        $parenDepth   = 0;
+        $bracketDepth = 0;
+        $ternaryDepth = 0;
+
+        while (true) {
+            $token = $this->tokens[$cursor] ?? new Token(TokenType::Eof, '');
+
+            if ($token->is(TokenType::Eof)) {
+                throw new AntlersSyntaxException('Unterminated ternary expression');
+            }
+
+            if ($token->is(TokenType::LParen)) {
+                $parenDepth++;
+                $cursor++;
+
+                continue;
+            }
+
+            if ($token->is(TokenType::RParen)) {
+                $parenDepth--;
+                $cursor++;
+
+                continue;
+            }
+
+            if ($token->is(TokenType::LBracket)) {
+                $bracketDepth++;
+                $cursor++;
+
+                continue;
+            }
+
+            if ($token->is(TokenType::RBracket)) {
+                $bracketDepth--;
+                $cursor++;
+
+                continue;
+            }
+
+            if ($parenDepth === 0 && $bracketDepth === 0) {
+                if ($token->is(TokenType::Question)) {
+                    $ternaryDepth++;
+                    $cursor++;
+
+                    continue;
+                }
+
+                if ($token->is(TokenType::Colon)) {
+                    if ($ternaryDepth === 0) {
+                        break;
+                    }
+
+                    $ternaryDepth--;
+                }
+            }
+
+            $cursor++;
+        }
+
+        $this->pos = $cursor;
+
+        return array_slice($this->tokens, $start, $cursor - $start);
+    }
+
+    /**
+     * @param Token[] $tokens
+     */
+    private function parseTokenSlice(array $tokens): AbstractNode
+    {
+        $previousTokens = $this->tokens;
+        $previousPos    = $this->pos;
+
+        $this->tokens = [...$tokens, new Token(TokenType::Eof, '')];
+        $this->pos    = 0;
+
+        try {
+            return $this->parsePipedExpression();
+        } finally {
+            $this->tokens = $previousTokens;
+            $this->pos    = $previousPos;
+        }
     }
 
     /**
@@ -500,12 +596,7 @@ final class LanguageParser
         if ($token->is(TokenType::LParen)) {
             $this->advance();
 
-            $expr = $this->parseExpr(0);
-
-            // Check for modifier chain or ternary inside parens before closing
-            if ($this->peek()->is(TokenType::Pipe)) {
-                $expr = $this->parseModifierChain($expr);
-            }
+            $expr = $this->parsePipedExpression();
 
             $this->consume(TokenType::RParen);
 
