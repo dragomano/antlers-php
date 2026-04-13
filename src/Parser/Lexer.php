@@ -126,6 +126,12 @@ final class Lexer
                 continue;
             }
 
+            if ($this->tryRead('?=')) {
+                $this->add(TokenType::QEquals, '?=');
+
+                continue;
+            }
+
             if ($this->tryRead('=>')) {
                 $this->add(TokenType::Arrow, '=>');
 

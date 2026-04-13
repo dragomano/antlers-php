@@ -8,6 +8,7 @@ use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\AntlersNode;
 use Bugo\Antlers\Nodes\ConditionNode;
+use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\LiteralNode;
 use Bugo\Antlers\Nodes\LoopNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
@@ -142,6 +143,7 @@ final class NodeProcessor
 
         if ($node instanceof ModifierChainNode
             || $node instanceof TernaryNode
+            || $node instanceof GatekeeperNode
             || $node instanceof NullCoalesceNode
             || $node instanceof VariableNode
         ) {

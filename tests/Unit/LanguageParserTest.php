@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
 use Bugo\Antlers\Nodes\TernaryNode;
@@ -29,5 +30,13 @@ describe('LanguageParser', function () {
             ->and($node->falseBranch)->toBeInstanceOf(ModifierChainNode::class)
             ->and($node->trueBranch->modifiers[0]->name)->toBe('upper')
             ->and($node->falseBranch->modifiers[0]->name)->toBe('lower');
+    });
+
+    it('parses gatekeeper expressions with modifier chains on the right-hand side', function (): void {
+        $node = $this->languageParser->parseExpression('show_bio ?= author.bio | upper');
+
+        expect($node)->toBeInstanceOf(GatekeeperNode::class)
+            ->and($node->right)->toBeInstanceOf(ModifierChainNode::class)
+            ->and($node->right->modifiers[0]->name)->toBe('upper');
     });
 });

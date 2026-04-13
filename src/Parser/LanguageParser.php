@@ -11,6 +11,7 @@ use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\BooleanNode;
 use Bugo\Antlers\Nodes\ConditionBranch;
 use Bugo\Antlers\Nodes\ConditionNode;
+use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\LoopNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\ModifierNode;
@@ -398,13 +399,26 @@ final class LanguageParser
 
     private function parsePipedExpression(): AbstractNode
     {
-        $expr = $this->parseTernaryExpression();
+        $expr = $this->parseGatekeeperExpression();
 
         if ($this->peek()->is(TokenType::Pipe)) {
             return $this->parseModifierChain($expr);
         }
 
         return $expr;
+    }
+
+    private function parseGatekeeperExpression(): AbstractNode
+    {
+        $expr = $this->parseTernaryExpression();
+
+        if (! $this->peek()->is(TokenType::QEquals)) {
+            return $expr;
+        }
+
+        $this->consume(TokenType::QEquals);
+
+        return new GatekeeperNode($expr, $this->parsePipedExpression());
     }
 
     private function parseTernaryExpression(): AbstractNode

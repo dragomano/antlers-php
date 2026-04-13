@@ -45,6 +45,7 @@ enum TokenType: string
     // Assignment / null coalesce
     case Equals     = 'T_EQUALS';       // =
     case Question   = 'T_QUESTION';     // ?
+    case QEquals    = 'T_QEQUALS';      // ?=
     case QQ         = 'T_QQ';           // ??
 
     // Grouping and array access

@@ -45,3 +45,25 @@ it('applies modifier chains to the whole ternary when the ternary is parenthesiz
             'alt'       => 'Guest',
         ]))->toBe('GUEST');
 });
+
+it('evaluates the gatekeeper right-hand side only when the left-hand side is truthy', function (): void {
+    expect(engine()->render('{{ show_bio ?= author.bio }}', [
+        'show_bio' => true,
+        'author'   => ['bio' => 'Writer'],
+    ]))->toBe('Writer')
+        ->and(engine()->render('{{ show_bio ?= author.bio }}', [
+            'show_bio' => false,
+            'author'   => ['bio' => 'Writer'],
+        ]))->toBe('');
+});
+
+it('supports modifier chains on the gatekeeper right-hand side', function (): void {
+    expect(engine()->render('{{ show_bio ?= author.bio | upper }}', [
+        'show_bio' => true,
+        'author'   => ['bio' => 'Writer'],
+    ]))->toBe('WRITER')
+        ->and(engine()->render('{{ show_bio ?= author.bio | upper }}', [
+            'show_bio' => false,
+            'author'   => ['bio' => 'Writer'],
+        ]))->toBe('');
+});

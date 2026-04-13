@@ -37,6 +37,10 @@ it('returns defined right side variable via ?? in strict mode', function (): voi
     expect(strictEngine()->render('{{ missing ?? name }}', ['name' => 'Bob']))->toBe('Bob');
 });
 
+it('does not evaluate the gatekeeper right side when the left side is falsy in strict mode', function (): void {
+    expect(strictEngine()->render('{{ show_bio ?= missing }}', ['show_bio' => false]))->toBe('');
+});
+
 it('throws when modifier is applied to undefined variable in strict mode', function (): void {
     expect(fn(): string => strictEngine()->render('{{ missing | upper }}'))
         ->toThrow(AntlersRuntimeException::class, 'Undefined variable: "missing"');

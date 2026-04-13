@@ -8,6 +8,7 @@ use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\BooleanNode;
+use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
 use Bugo\Antlers\Nodes\NullNode;
@@ -48,6 +49,7 @@ final class ExpressionEvaluator
             $node instanceof BinaryOpNode      => $this->evalBinary($node, $scope),
             $node instanceof UnaryOpNode       => $this->evalUnary($node, $scope),
             $node instanceof TernaryNode       => $this->evalTernary($node, $scope),
+            $node instanceof GatekeeperNode    => $this->evalGatekeeper($node, $scope),
             $node instanceof NullCoalesceNode  => $this->evalNullCoalesce($node, $scope),
             $node instanceof ModifierChainNode => $this->evalModifierChain($node, $scope),
             default                            => throw new AntlersRuntimeException(
@@ -183,6 +185,20 @@ final class ExpressionEvaluator
         return $this->isTruthy($cond->value)
             ? $this->evaluate($node->trueBranch, $scope)
             : $this->evaluate($node->falseBranch, $scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function evalGatekeeper(GatekeeperNode $node, array $scope): mixed
+    {
+        $condition = $this->evaluateResult($node->condition, $scope);
+
+        if (! $this->isTruthy($condition->value)) {
+            return null;
+        }
+
+        return $this->evaluate($node->right, $scope);
     }
 
     /**

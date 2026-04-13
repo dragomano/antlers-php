@@ -64,6 +64,10 @@ describe('Lexer', function () {
         expect($this->lexer->tokenize('??')[0]->type)->toBe(TokenType::QQ);
     });
 
+    it('tokenizes gatekeeper operator', function (): void {
+        expect($this->lexer->tokenize('?=')[0]->type)->toBe(TokenType::QEquals);
+    });
+
     it('tokenizes string literals', function (): void {
         $tokens = $this->lexer->tokenize('"hello world"');
         expect($tokens[0]->type)->toBe(TokenType::String)
