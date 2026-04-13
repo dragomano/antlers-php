@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Nodes\BinaryOpNode;
+use Bugo\Antlers\Nodes\CollectionOperationNode;
 use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
@@ -38,5 +40,31 @@ describe('LanguageParser', function () {
         expect($node)->toBeInstanceOf(GatekeeperNode::class)
             ->and($node->right)->toBeInstanceOf(ModifierChainNode::class)
             ->and($node->right->modifiers[0]->name)->toBe('upper');
+    });
+
+    it('parses official collection operator syntax with parentheses', function (): void {
+        $node = $this->languageParser->parseExpression('items where (active == true) take (2)');
+
+        expect($node)->toBeInstanceOf(CollectionOperationNode::class)
+            ->and($node->operators)->toHaveCount(2)
+            ->and($node->operators[0]->name)->toBe('where')
+            ->and($node->operators[1]->name)->toBe('take');
+    });
+
+    it('keeps arithmetic inside collection operator arguments', function (): void {
+        $node = $this->languageParser->parseExpression('items take (1 + 1)');
+
+        expect($node)->toBeInstanceOf(CollectionOperationNode::class)
+            ->and($node->operators[0]->name)->toBe('take')
+            ->and($node->operators[0]->arguments[0])->toBeInstanceOf(BinaryOpNode::class)
+            ->and($node->operators[0]->arguments[0]->operator)->toBe('+');
+    });
+
+    it('parses modifier arguments in parenthesis form', function (): void {
+        $node = $this->languageParser->parseExpression('title | truncate(3, "!")');
+
+        expect($node)->toBeInstanceOf(ModifierChainNode::class)
+            ->and($node->modifiers[0]->name)->toBe('truncate')
+            ->and($node->modifiers[0]->params)->toHaveCount(2);
     });
 });

@@ -8,6 +8,10 @@ use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\BooleanNode;
+use Bugo\Antlers\Nodes\CollectionGroupArgument;
+use Bugo\Antlers\Nodes\CollectionOperationNode;
+use Bugo\Antlers\Nodes\CollectionOperatorNode;
+use Bugo\Antlers\Nodes\CollectionSortArgument;
 use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
@@ -17,6 +21,7 @@ use Bugo\Antlers\Nodes\StringValueNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
 use Bugo\Antlers\Nodes\VariableNode;
+use Traversable;
 
 /**
  * Evaluates expression AST nodes against a data scope.
@@ -41,18 +46,19 @@ final class ExpressionEvaluator
     public function evaluate(AbstractNode $node, array $scope): mixed
     {
         return match (true) {
-            $node instanceof NumberNode        => $node->value,
-            $node instanceof BooleanNode       => $node->value,
-            $node instanceof NullNode          => null,
-            $node instanceof StringValueNode   => $this->evalString($node, $scope),
-            $node instanceof VariableNode      => $this->resolveVariable($node->path, $scope),
-            $node instanceof BinaryOpNode      => $this->evalBinary($node, $scope),
-            $node instanceof UnaryOpNode       => $this->evalUnary($node, $scope),
-            $node instanceof TernaryNode       => $this->evalTernary($node, $scope),
-            $node instanceof GatekeeperNode    => $this->evalGatekeeper($node, $scope),
-            $node instanceof NullCoalesceNode  => $this->evalNullCoalesce($node, $scope),
-            $node instanceof ModifierChainNode => $this->evalModifierChain($node, $scope),
-            default                            => throw new AntlersRuntimeException(
+            $node instanceof NumberNode              => $node->value,
+            $node instanceof BooleanNode             => $node->value,
+            $node instanceof NullNode                => null,
+            $node instanceof StringValueNode         => $this->evalString($node, $scope),
+            $node instanceof VariableNode            => $this->resolveVariable($node->path, $scope),
+            $node instanceof BinaryOpNode            => $this->evalBinary($node, $scope),
+            $node instanceof UnaryOpNode             => $this->evalUnary($node, $scope),
+            $node instanceof TernaryNode             => $this->evalTernary($node, $scope),
+            $node instanceof GatekeeperNode          => $this->evalGatekeeper($node, $scope),
+            $node instanceof NullCoalesceNode        => $this->evalNullCoalesce($node, $scope),
+            $node instanceof ModifierChainNode       => $this->evalModifierChain($node, $scope),
+            $node instanceof CollectionOperationNode => $this->evalCollectionOperation($node, $scope),
+            default                                  => throw new AntlersRuntimeException(
                 'Cannot evaluate node of type: ' . $node::class,
             ),
         };
@@ -239,6 +245,22 @@ final class ExpressionEvaluator
         return $value->value;
     }
 
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function evalCollectionOperation(CollectionOperationNode $node, array $scope): mixed
+    {
+        return array_reduce(
+            $node->operators,
+            fn(mixed $carry, CollectionOperatorNode $operator): mixed => $this->applyCollectionOperator(
+                $operator,
+                $carry,
+                $scope,
+            ),
+            $this->evaluate($node->value, $scope),
+        );
+    }
+
     public function isTruthy(mixed $value): bool
     {
         if ($value === null || $value === false) {
@@ -301,5 +323,356 @@ final class ExpressionEvaluator
     private function power(float $left, float $right): float
     {
         return $left ** $right;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function applyCollectionOperator(CollectionOperatorNode $operator, mixed $value, array $scope): mixed
+    {
+        return match ($operator->name) {
+            'merge'   => $this->applyMergeOperator($value, $operator, $scope),
+            'where'   => $this->applyWhereOperator($value, $operator, $scope),
+            'take'    => $this->applySliceOperator($value, $operator, $scope, true),
+            'skip'    => $this->applySliceOperator($value, $operator, $scope, false),
+            'pluck'   => $this->applyPluckOperator($value, $operator, $scope),
+            'orderby' => $this->applyOrderByOperator($value, $operator, $scope),
+            'groupby' => $this->applyGroupByOperator($value, $operator, $scope),
+            default   => throw new AntlersRuntimeException("Unknown collection operator: $operator->name"),
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function applyMergeOperator(mixed $value, CollectionOperatorNode $operator, array $scope): mixed
+    {
+        $left  = $this->iterableToArray($value);
+        $right = $this->iterableToArray($this->evaluate($this->collectionExpressionArgument($operator), $scope));
+
+        if ($left === null || $right === null) {
+            return $value;
+        }
+
+        return array_merge($left, $right);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function applyWhereOperator(mixed $value, CollectionOperatorNode $operator, array $scope): mixed
+    {
+        $items = $this->iterableToArray($value);
+        if ($items === null) {
+            return $value;
+        }
+
+        $condition = $this->collectionExpressionArgument($operator);
+
+        return array_values(array_filter($items, function (mixed $item) use ($condition, $operator, $scope): bool {
+            $itemScope = $this->makeCollectionItemScope($scope, $item);
+
+            if ($operator->scopeAlias !== null) {
+                $itemScope = array_merge($itemScope, [$operator->scopeAlias => $item]);
+            }
+
+            return $this->evaluateTruthy($condition, $itemScope);
+        }));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function applySliceOperator(
+        mixed $value,
+        CollectionOperatorNode $operator,
+        array $scope,
+        bool $fromStart,
+    ): mixed {
+        $items = $this->iterableToArray($value);
+        if ($items === null) {
+            return $value;
+        }
+
+        $count = max(
+            0,
+            (int) $this->coerceNumeric($this->evaluate($this->collectionExpressionArgument($operator), $scope)),
+        );
+
+        return $fromStart ? array_slice($items, 0, $count) : array_slice($items, $count);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function applyPluckOperator(mixed $value, CollectionOperatorNode $operator, array $scope): mixed
+    {
+        $items = $this->iterableToArray($value);
+        if ($items === null) {
+            return $value;
+        }
+
+        return array_map(
+            fn(mixed $item): mixed => $this->evaluateCollectionField(
+                $this->collectionExpressionArgument($operator),
+                $item,
+                $scope,
+            ),
+            $items,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function applyOrderByOperator(mixed $value, CollectionOperatorNode $operator, array $scope): mixed
+    {
+        $items = $this->iterableToArray($value);
+        if ($items === null) {
+            return $value;
+        }
+
+        usort($items, function (mixed $left, mixed $right) use ($operator, $scope): int {
+            foreach ($operator->arguments as $argument) {
+                if (! $argument instanceof CollectionSortArgument) {
+                    continue;
+                }
+
+                $direction = $this->sortDirection($argument->direction, $scope);
+                $result    = $this->compareSortValues(
+                    $this->evaluateCollectionField($argument->field, $left, $scope),
+                    $this->evaluateCollectionField($argument->field, $right, $scope),
+                );
+
+                if ($result !== 0) {
+                    return $direction === 'desc' ? -$result : $result;
+                }
+            }
+
+            return 0;
+        });
+
+        return $items;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function applyGroupByOperator(mixed $value, CollectionOperatorNode $operator, array $scope): mixed
+    {
+        $items = $this->iterableToArray($value);
+        if ($items === null) {
+            return $value;
+        }
+
+        /** @var array<string, array{key: mixed, fields: array<string, mixed>, values: list<mixed>}> $groups */
+        $groups = [];
+
+        array_walk($items, function (mixed $item) use (&$groups, $operator, $scope): void {
+            $groups = $this->reduceGroupedItems($groups, $item, $operator, $scope);
+        });
+
+        $valuesAlias = $operator->valuesAlias ?? 'values';
+
+        return array_values(array_map(function (array $group) use ($valuesAlias): array {
+            /** @var array<string, mixed> $base */
+            $base = $group['fields'];
+            $base = array_merge($base, ['key' => $group['key']]);
+
+            $base[$valuesAlias] = $group['values'];
+
+            if ($valuesAlias !== 'values') {
+                $base['values'] = $group['values'];
+            }
+
+            return $base;
+        }, $groups));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function evaluateCollectionField(AbstractNode $field, mixed $item, array $scope): mixed
+    {
+        if ($field instanceof StringValueNode && ! $field->hasInterpolations) {
+            return $this->paths->get($field->value, $this->makeCollectionItemScope($scope, $item));
+        }
+
+        return $this->evaluate($field, $this->makeCollectionItemScope($scope, $item));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function makeCollectionItemScope(array $scope, mixed $item): array
+    {
+        if (is_array($item)) {
+            /** @var array<string, mixed> $normalized */
+            $normalized = array_filter($item, is_string(...), ARRAY_FILTER_USE_KEY);
+
+            return array_merge($scope, $normalized);
+        }
+
+        if (is_object($item)) {
+            /** @var array<string, mixed> $normalized */
+            $normalized = array_filter((array) $item, is_string(...), ARRAY_FILTER_USE_KEY);
+
+            return array_merge($scope, $normalized);
+        }
+
+        return array_merge($scope, ['value' => $item]);
+    }
+
+    /**
+     * @return array<array-key, mixed>|null
+     */
+    private function iterableToArray(mixed $value): ?array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if ($value instanceof Traversable) {
+            return iterator_to_array($value);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function sortDirection(?AbstractNode $direction, array $scope): string
+    {
+        if ($direction === null) {
+            return 'asc';
+        }
+
+        return $this->normalizeSortDirection($this->evaluate($direction, $scope));
+    }
+
+    private function compareSortValues(mixed $left, mixed $right): int
+    {
+        return $this->sortableValue($left) <=> $this->sortableValue($right);
+    }
+
+    private function sortableValue(mixed $value): int|float|string
+    {
+        if (is_int($value) || is_float($value) || is_string($value)) {
+            return $value;
+        }
+
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+
+        return $this->stringify($value);
+    }
+
+    private function inferCollectionFieldAlias(AbstractNode $field): string
+    {
+        return match (true) {
+            $field instanceof VariableNode => preg_replace('/^.*[.:]/', '', $field->path) ?? $field->path,
+            $field instanceof StringValueNode && ! $field->hasInterpolations => $field->value,
+            default => 'group',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildCollectionGroupKey(CollectionOperatorNode $operator, mixed $item, array $scope): array
+    {
+        /** @var array<string, mixed> $groupKey */
+        $groupKey = [];
+
+        foreach ($operator->arguments as $argument) {
+            if (! $argument instanceof CollectionGroupArgument) {
+                continue;
+            }
+
+            $groupName = $argument->alias ?? $this->inferCollectionFieldAlias($argument->field);
+            $groupKey  = array_merge($groupKey, [
+                $groupName => $this->evaluateCollectionField($argument->field, $item, $scope),
+            ]);
+        }
+
+        return $groupKey;
+    }
+
+    /**
+     * @param array<string, mixed> $groupKey
+     * @param array{key: mixed, fields: array<string, mixed>, values: list<mixed>}|null $group
+     * @return array{key: mixed, fields: array<string, mixed>, values: list<mixed>}
+     */
+    private function appendGroupedItem(?array $group, array $groupKey, mixed $item): array
+    {
+        if ($group === null) {
+            $group = [
+                'key'    => count($groupKey) === 1 ? reset($groupKey) : $groupKey,
+                'fields' => $groupKey,
+                'values' => [],
+            ];
+        }
+
+        $group['values'] = array_merge($group['values'], [$item]);
+
+        return $group;
+    }
+
+    /**
+     * @param array<string, array{key: mixed, fields: array<string, mixed>, values: list<mixed>}> $groups
+     * @return array{key: mixed, fields: array<string, mixed>, values: list<mixed>}|null
+     */
+    private function existingGroupedItem(array $groups, string $serialized): ?array
+    {
+        return $groups[$serialized] ?? null;
+    }
+
+    /**
+     * @param array<string, array{key: mixed, fields: array<string, mixed>, values: list<mixed>}> $groups
+     * @param array<string, mixed> $scope
+     * @return array<string, array{key: mixed, fields: array<string, mixed>, values: list<mixed>}>
+     */
+    private function reduceGroupedItems(
+        array $groups,
+        mixed $item,
+        CollectionOperatorNode $operator,
+        array $scope,
+    ): array {
+        $groupKey   = $this->buildCollectionGroupKey($operator, $item, $scope);
+        $serialized = serialize($groupKey);
+
+        $groups[$serialized] = $this->appendGroupedItem(
+            $this->existingGroupedItem($groups, $serialized),
+            $groupKey,
+            $item,
+        );
+
+        return $groups;
+    }
+
+    private function normalizeSortDirection(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? 'asc' : 'desc';
+        }
+
+        return strtolower($this->stringify($value)) === 'desc' ? 'desc' : 'asc';
+    }
+
+    private function collectionExpressionArgument(CollectionOperatorNode $operator): AbstractNode
+    {
+        $argument = $operator->arguments[0] ?? null;
+
+        if ($argument instanceof AbstractNode) {
+            return $argument;
+        }
+
+        throw new AntlersRuntimeException(
+            "Collection operator \"$operator->name\" expects an expression argument",
+        );
     }
 }

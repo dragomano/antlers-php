@@ -380,6 +380,11 @@ it('chains multiple modifiers', function (): void {
         ->toBe('HEL...');
 });
 
+it('supports modifier arguments in parenthesis form', function (): void {
+    expect(engine()->render('{{ name | truncate(3, "!") }}', ['name' => 'hello']))
+        ->toBe('hel!');
+});
+
 it('allows registering custom modifier', function (): void {
     $e = engine();
     $e->addModifier('shout', fn($v): string => strtoupper((string) $v) . '!!!');

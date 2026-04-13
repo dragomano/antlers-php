@@ -9,6 +9,10 @@ use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\AntlersNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\BooleanNode;
+use Bugo\Antlers\Nodes\CollectionGroupArgument;
+use Bugo\Antlers\Nodes\CollectionOperationNode;
+use Bugo\Antlers\Nodes\CollectionOperatorNode;
+use Bugo\Antlers\Nodes\CollectionSortArgument;
 use Bugo\Antlers\Nodes\ConditionBranch;
 use Bugo\Antlers\Nodes\ConditionNode;
 use Bugo\Antlers\Nodes\GatekeeperNode;
@@ -410,7 +414,7 @@ final class LanguageParser
 
     private function parseGatekeeperExpression(): AbstractNode
     {
-        $expr = $this->parseTernaryExpression();
+        $expr = $this->parseCollectionExpression();
 
         if (! $this->peek()->is(TokenType::QEquals)) {
             return $expr;
@@ -419,6 +423,34 @@ final class LanguageParser
         $this->consume(TokenType::QEquals);
 
         return new GatekeeperNode($expr, $this->parsePipedExpression());
+    }
+
+    private function parseCollectionExpression(): AbstractNode
+    {
+        $expr = $this->parseTernaryExpression();
+
+        $operations = [];
+
+        while ($this->isCollectionOperator($this->peek())) {
+            $operator = strtolower($this->advance()->value);
+
+            $operations[] = match ($operator) {
+                'merge'   => new CollectionOperatorNode($operator, [$this->parseTernaryExpression()]),
+                'where'   => $this->parseWhereCollectionOperator(),
+                'take',
+                'skip',
+                'pluck'   => new CollectionOperatorNode($operator, [$this->parseSingleCollectionArgument()]),
+                'orderby' => $this->parseOrderByCollectionOperator(),
+                'groupby' => $this->parseGroupByCollectionOperator(),
+                default   => throw new AntlersSyntaxException("Unsupported collection operator: $operator"),
+            };
+        }
+
+        if ($operations === []) {
+            return $expr;
+        }
+
+        return new CollectionOperationNode($expr, $operations);
     }
 
     private function parseTernaryExpression(): AbstractNode
@@ -714,10 +746,239 @@ final class LanguageParser
                 $params[] = $this->parsePrimary();
             }
 
+            if ($this->peek()->is(TokenType::LParen)) {
+                $params = $this->parseParenthesizedExpressionList();
+            }
+
             $modifiers[] = new ModifierNode($nameToken->value, $params);
         }
 
         return new ModifierChainNode($value, $modifiers);
+    }
+
+    private function isCollectionOperator(Token $token): bool
+    {
+        return $token->is(TokenType::Identifier)
+            && in_array(strtolower($token->value), [
+                'merge',
+                'where',
+                'take',
+                'skip',
+                'pluck',
+                'orderby',
+                'groupby',
+            ], true);
+    }
+
+    private function parseWhereCollectionOperator(): CollectionOperatorNode
+    {
+        $tokens = $this->parseParenthesizedTokenSlice();
+        $alias  = null;
+
+        foreach ($tokens as $index => $token) {
+            if ($token->is(TokenType::Arrow)) {
+                if ($index === 0) {
+                    throw new AntlersSyntaxException('Expected identifier before => in where operator');
+                }
+
+                $scopeToken = $tokens[$index - 1] ?? null;
+                if (! $scopeToken instanceof Token || ! $scopeToken->is(TokenType::Identifier)) {
+                    throw new AntlersSyntaxException('Expected identifier before => in where operator');
+                }
+
+                $alias  = $scopeToken->value;
+                $tokens = array_slice($tokens, $index + 1);
+
+                break;
+            }
+        }
+
+        return new CollectionOperatorNode(
+            'where',
+            [$this->parseTokenSlice($tokens)],
+            scopeAlias: $alias,
+        );
+    }
+
+    private function parseOrderByCollectionOperator(): CollectionOperatorNode
+    {
+        $arguments = array_map(function (array $tokens): CollectionSortArgument {
+            [$field, $direction] = $this->parseCollectionFieldAndTail($tokens);
+
+            return new CollectionSortArgument($field, $direction);
+        }, $this->parseParenthesizedTokenGroups());
+
+        return new CollectionOperatorNode('orderby', $arguments);
+    }
+
+    private function parseGroupByCollectionOperator(): CollectionOperatorNode
+    {
+        $arguments = array_map(function (array $tokens): CollectionGroupArgument {
+            [$field, $alias] = $this->parseCollectionFieldAndAlias($tokens);
+
+            return new CollectionGroupArgument($field, $alias);
+        }, $this->parseParenthesizedTokenGroups());
+
+        $valuesAlias = null;
+        if ($this->peek()->is(TokenType::As)) {
+            $this->advance();
+
+            $valuesAlias = $this->parseCollectionAliasToken($this->advance());
+        }
+
+        return new CollectionOperatorNode('groupby', $arguments, $valuesAlias);
+    }
+
+    private function parseSingleCollectionArgument(): AbstractNode
+    {
+        return $this->parseTokenSlice($this->parseParenthesizedTokenSlice());
+    }
+
+    /**
+     * @return list<AbstractNode>
+     */
+    private function parseParenthesizedExpressionList(): array
+    {
+        return array_map($this->parseTokenSlice(...), $this->parseParenthesizedTokenGroups());
+    }
+
+    /**
+     * @return list<Token>
+     */
+    private function parseParenthesizedTokenSlice(): array
+    {
+        $groups = $this->parseParenthesizedTokenGroups();
+
+        if (count($groups) !== 1) {
+            throw new AntlersSyntaxException('Expected a single parenthesized expression');
+        }
+
+        return $groups[0];
+    }
+
+    /**
+     * @return list<list<Token>>
+     */
+    private function parseParenthesizedTokenGroups(): array
+    {
+        $this->consume(TokenType::LParen);
+
+        /** @var list<list<Token>> $groups */
+        $groups = [];
+        $start  = $this->pos;
+        $cursor = $this->pos;
+        $depth  = 0;
+
+        while (true) {
+            $token = $this->tokens[$cursor] ?? new Token(TokenType::Eof, '');
+
+            if ($token->is(TokenType::Eof)) {
+                throw new AntlersSyntaxException('Unterminated parenthesized expression');
+            }
+
+            if ($token->is(TokenType::LParen, TokenType::LBracket)) {
+                $depth++;
+            } elseif ($token->is(TokenType::RParen)) {
+                if ($depth === 0) {
+                    $groups[] = array_values(array_slice($this->tokens, $start, $cursor - $start));
+
+                    $this->pos = $cursor + 1;
+
+                    /** @var list<list<Token>> $filtered */
+                    $filtered = [];
+                    foreach ($groups as $group) {
+                        if ($group !== []) {
+                            $filtered[] = $group;
+                        }
+                    }
+
+                    return $filtered;
+                }
+
+                $depth--;
+            } elseif ($token->is(TokenType::RBracket)) {
+                $depth--;
+            } elseif ($token->is(TokenType::Comma) && $depth === 0) {
+                $groups[] = array_values(array_slice($this->tokens, $start, $cursor - $start));
+                $start    = $cursor + 1;
+            }
+
+            $cursor++;
+        }
+    }
+
+    /**
+     * @param list<Token> $tokens
+     * @return array{AbstractNode, ?AbstractNode}
+     */
+    private function parseCollectionFieldAndTail(array $tokens): array
+    {
+        if ($tokens === []) {
+            throw new AntlersSyntaxException('Expected collection operator argument');
+        }
+
+        [$field, $consumed] = $this->parseLeadingExpressionFromTokens($tokens);
+
+        $tail = array_slice($tokens, $consumed);
+
+        return [$field, $tail !== [] ? $this->parseTokenSlice($tail) : null];
+    }
+
+    /**
+     * @param list<Token> $tokens
+     * @return array{AbstractNode, ?string}
+     */
+    private function parseCollectionFieldAndAlias(array $tokens): array
+    {
+        if ($tokens === []) {
+            throw new AntlersSyntaxException('Expected groupby argument');
+        }
+
+        [$field, $consumed] = $this->parseLeadingExpressionFromTokens($tokens);
+
+        $tail = array_slice($tokens, $consumed);
+
+        if ($tail === []) {
+            return [$field, null];
+        }
+
+        if (count($tail) !== 1) {
+            throw new AntlersSyntaxException('Invalid groupby alias');
+        }
+
+        return [$field, $this->parseCollectionAliasToken($tail[0])];
+    }
+
+    /**
+     * @param list<Token> $tokens
+     * @return array{AbstractNode, int}
+     */
+    private function parseLeadingExpressionFromTokens(array $tokens): array
+    {
+        $previousTokens = $this->tokens;
+        $previousPos    = $this->pos;
+
+        $this->tokens = [...$tokens, new Token(TokenType::Eof, '')];
+        $this->pos    = 0;
+
+        try {
+            $node     = $this->parsePipedExpression();
+            $consumed = $this->pos;
+
+            return [$node, $consumed];
+        } finally {
+            $this->tokens = $previousTokens;
+            $this->pos    = $previousPos;
+        }
+    }
+
+    private function parseCollectionAliasToken(Token $token): string
+    {
+        if ($token->is(TokenType::String, TokenType::Identifier)) {
+            return $token->value;
+        }
+
+        throw new AntlersSyntaxException('Expected collection alias name');
     }
 
     private function consumeModifierName(): Token

@@ -8,6 +8,7 @@ use Bugo\Antlers\Runtime\ValueResult;
 use Bugo\Antlers\Support\MarkdownRenderer;
 use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\String\UnicodeString;
+use Traversable;
 
 /**
  * Registers all built-in Antlers modifiers.
@@ -24,7 +25,8 @@ final class CoreModifiers
 
         $registry->register('lcfirst', static fn(mixed $v): string => self::lcfirst(self::string($v)));
 
-        $registry->register('title', static fn(mixed $v): string => self::unicode($v)->title(true)->toString());
+        $registry->register('title', static fn(mixed $v): string
+            => self::unicode($v)->title(true)->toString());
 
         $registry->register('trim', static fn(mixed $v, array $p): string
             => trim(self::string($v), self::string($p[0] ?? " \t\n\r\0\x0B")));
@@ -152,7 +154,8 @@ final class CoreModifiers
             return $divisor !== 0.0 ? self::float($v) / $divisor : 0;
         });
 
-        $registry->register('mod', static fn(mixed $v, array $p): int => self::int($v) % self::int($p[0] ?? 1));
+        $registry->register('mod', static fn(mixed $v, array $p): int
+            => self::int($v) % self::int($p[0] ?? 1));
 
         $registry->register('ceil', static fn(mixed $v): int => (int) ceil(self::float($v)));
 
@@ -203,15 +206,16 @@ final class CoreModifiers
         });
 
         $registry->register('pluck', static function (mixed $v, array $p): mixed {
-            if (! is_array($v) || $p === []) {
+            $items = self::iterableToArray($v);
+            if ($items === null || $p === []) {
                 return $v;
             }
 
             $key = self::parameterKey($p);
 
             return array_map(
-                static fn(mixed $item): mixed => is_array($item) ? ($item[$key] ?? null) : null,
-                $v,
+                static fn(mixed $item): mixed => self::dataGet($item, $key),
+                $items,
             );
         });
 
@@ -239,7 +243,8 @@ final class CoreModifiers
         $registry->register('values', static fn(mixed $v): array => is_array($v) ? array_values($v) : []);
 
         $registry->register('where', static function (mixed $v, array $p): mixed {
-            if (! is_array($v) || count($p) < 2) {
+            $items = self::iterableToArray($v);
+            if ($items === null || count($p) < 2) {
                 return $v;
             }
 
@@ -247,8 +252,8 @@ final class CoreModifiers
             $value = new ValueResult($p[1] ?? null);
 
             return array_values(array_filter(
-                $v,
-                static fn(mixed $item): bool => is_array($item) && ($item[$key] ?? null) == $value->value,
+                $items,
+                static fn(mixed $item): bool => self::dataGet($item, $key) == $value->value,
             ));
         });
 
@@ -465,7 +470,8 @@ final class CoreModifiers
             }
 
             $seen[$hash] = true;
-            $result       = array_merge($result, [$value]);
+
+            $result = array_merge($result, [$value]);
         });
 
         return $result;
@@ -478,5 +484,42 @@ final class CoreModifiers
         }
 
         return 'value:' . serialize($value);
+    }
+
+    /**
+     * @return array<array-key, mixed>|null
+     */
+    private static function iterableToArray(mixed $value): ?array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if ($value instanceof Traversable) {
+            return iterator_to_array($value);
+        }
+
+        return null;
+    }
+
+    private static function dataGet(mixed $value, int|string $key): mixed
+    {
+        if (is_array($value)) {
+            return $value[$key] ?? null;
+        }
+
+        if (is_object($value)) {
+            $property = (string) $key;
+
+            if (property_exists($value, $property)) {
+                return $value->{$property};
+            }
+
+            if (method_exists($value, $property)) {
+                return $value->{$property}();
+            }
+        }
+
+        return null;
     }
 }
