@@ -11,6 +11,13 @@ it('calls a simple callable tag', function (): void {
     expect($e->render('{{ greet name="Alice" }}'))->toBe('Hello, Alice!');
 });
 
+it('prefers a simple tag over a same-named variable by default', function (): void {
+    $e = engine();
+    $e->addTag('greet', fn(): string => 'from-tag');
+
+    expect($e->render('{{ greet }}', ['greet' => 'from-variable']))->toBe('from-tag');
+});
+
 it('calls a namespaced tag method', function (): void {
     $e = engine();
     $e->addTag('my', fn($params, $data, $proc, $method) => match ($method) {
@@ -46,4 +53,20 @@ it('calls a class-based tag', function (): void {
 
 it('unknown tag returns empty string in lenient mode', function (): void {
     expect(engine()->render('{{ unknown_tag }}'))->toBe('');
+});
+
+it('forces tag resolution with percent prefix even when a variable exists', function (): void {
+    $e = engine();
+    $e->addTag('greet', fn(): string => 'from-tag');
+
+    expect($e->render('{{ %greet }}', ['greet' => 'from-variable']))->toBe('from-tag');
+});
+
+it('prefers colon-notation variables over matching tag methods when the path exists', function (): void {
+    $e = engine();
+    $e->addTag('user', fn($params, $data, $proc, $method): string => $method === 'profile' ? 'from-tag' : '');
+
+    expect($e->render('{{ user:profile:name }}', [
+        'user' => ['profile' => ['name' => 'Alice']],
+    ]))->toBe('Alice');
 });

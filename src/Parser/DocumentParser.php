@@ -152,7 +152,7 @@ final class DocumentParser
     {
         $content = ltrim($content, '/ ');
         // Match first identifier (may include colon for tag:method)
-        if (preg_match('/^(\w+(?::\w+)?)/', $content, $m)) {
+        if (preg_match('/^([%$]?\w+(?::\w+)?)/', $content, $m)) {
             return strtolower($m[1]);
         }
 
@@ -303,6 +303,6 @@ final class DocumentParser
         // If there is a matching {{ /name }} anywhere, treat as block tag.
         // This covers: simple vars {{ items }}, tags with params {{ wrap tag="p" }}.
         // Expressions with spaces or operators and no matching close tag — self-closing
-        return isset($pairedNames[$name]) && preg_match('/^[\w.]+$/', $name);
+        return isset($pairedNames[$name]) && preg_match('/^[%$]?[\w.]+$/', $name);
     }
 }

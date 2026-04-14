@@ -10,6 +10,7 @@ use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
 use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\TernaryNode;
+use Bugo\Antlers\Nodes\VariableNode;
 use Bugo\Antlers\Parser\LanguageParser;
 
 describe('LanguageParser', function (): void {
@@ -86,5 +87,12 @@ describe('LanguageParser', function (): void {
             ->and($node->statements)->toHaveCount(2)
             ->and($node->statements[0])->toBeInstanceOf(AssignmentNode::class)
             ->and($node->statements[1])->toBeInstanceOf(ModifierChainNode::class);
+    });
+
+    it('parses explicit variable syntax with colon paths', function (): void {
+        $node = $this->languageParser->parseExpression('$user:profile:name');
+
+        expect($node)->toBeInstanceOf(VariableNode::class)
+            ->and($node->path)->toBe('user:profile:name');
     });
 });

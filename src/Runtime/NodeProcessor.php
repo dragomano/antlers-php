@@ -216,6 +216,10 @@ final class NodeProcessor
                 return $this->processNode($parsed, $scope);
             }
 
+            if ($parsed instanceof VariableNode) {
+                return $this->processPairedVariable($parsed->path, $node->children, $scope);
+            }
+
             // Otherwise: paired variable loop
             return $this->processPairedVariable($node->rawContent, $node->children, $scope);
         }

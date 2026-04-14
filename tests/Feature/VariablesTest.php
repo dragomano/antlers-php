@@ -94,3 +94,19 @@ it('supports multiple statements separated by semicolons', function (): void {
 it('supports semicolon-separated sub-expressions inside parentheses', function (): void {
     expect(engine()->render('{{ 2 * (count = 1; count + 2) }}{{ count }}'))->toBe('61');
 });
+
+it('forces variable resolution with dollar prefix even when a same-named tag exists', function (): void {
+    $e = engine();
+    $e->addTag('greet', fn(): string => 'from-tag');
+
+    expect($e->render('{{ $greet }}', ['greet' => 'from-variable']))->toBe('from-variable');
+});
+
+it('supports explicit variable syntax for paired loops when a same-named tag exists', function (): void {
+    $e = engine();
+    $e->addTag('items', fn(): string => 'from-tag');
+
+    expect($e->render('{{ $items }}{{ value }}|{{ /$items }}', [
+        'items' => ['a', 'b'],
+    ]))->toBe('a|b|');
+});

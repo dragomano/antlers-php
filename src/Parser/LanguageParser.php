@@ -97,6 +97,10 @@ final class LanguageParser
             return $this->parseSetNode($raw);
         }
 
+        if (str_starts_with($raw, '%')) {
+            return $this->parseTagNode($node);
+        }
+
         if ($node->children !== [] && str_contains($node->name, ':')) {
             return $this->parseTagNode($node);
         }
@@ -260,7 +264,7 @@ final class LanguageParser
 
     private function parseTagNode(AntlersNode $blockNode): TagNode
     {
-        $raw    = $blockNode->rawContent;
+        $raw    = ltrim($blockNode->rawContent, '%');
         $method = 'index';
 
         // Extract tag name (possibly tag:method)
@@ -756,6 +760,10 @@ final class LanguageParser
             return new NullNode();
         }
 
+        if ($token->is(TokenType::Dollar)) {
+            return $this->parseExplicitVariablePath();
+        }
+
         // Identifier — variable path or function call
         if ($token->is(TokenType::Identifier)) {
             return $this->parseVariablePath();
@@ -789,6 +797,38 @@ final class LanguageParser
         // Array subscript: items[0] or items['key']
         while ($this->peek()->is(TokenType::LBracket)) {
             $this->advance(); // consume [
+
+            $indexToken = $this->advance();
+
+            $path .= '[' . $indexToken->value . ']';
+
+            $this->consume(TokenType::RBracket);
+        }
+
+        return new VariableNode($path);
+    }
+
+    private function parseExplicitVariablePath(): VariableNode
+    {
+        $this->consume(TokenType::Dollar);
+
+        $path = $this->advance()->value;
+
+        while ($this->peek()->is(TokenType::Dot, TokenType::Colon)) {
+            $separator = $this->advance();
+            $next      = $this->peek();
+
+            if (! $next->is(TokenType::Identifier)) {
+                throw new AntlersSyntaxException(
+                    "Expected identifier after {$separator->type->value} in variable path",
+                );
+            }
+
+            $path .= $separator->value . $this->advance()->value;
+        }
+
+        while ($this->peek()->is(TokenType::LBracket)) {
+            $this->advance();
 
             $indexToken = $this->advance();
 

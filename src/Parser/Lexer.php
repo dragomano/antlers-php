@@ -140,6 +140,7 @@ final class Lexer
 
             // Single-char tokens
             match ($ch) {
+                '$'     => $this->add(TokenType::Dollar, '$'),
                 '+'     => $this->add(TokenType::Plus, '+'),
                 '-'     => $this->add(TokenType::Minus, '-'),
                 '*'     => $this->add(TokenType::Star, '*'),

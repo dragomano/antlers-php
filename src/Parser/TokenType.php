@@ -7,6 +7,7 @@ namespace Bugo\Antlers\Parser;
 enum TokenType: string
 {
     // Identifiers and paths
+    case Dollar     = 'T_DOLLAR';       // $ explicit variable prefix
     case Identifier = 'T_IDENTIFIER';   // variable names, tag names, keywords
     case Dot        = 'T_DOT';          // . path separator or string concat op
     case Colon      = 'T_COLON';        // : tag:method separator or modifier param
