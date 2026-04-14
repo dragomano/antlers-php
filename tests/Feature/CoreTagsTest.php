@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+function fixturePath(string $relative): string
+{
+    return dirname(__DIR__) . '/Fixtures/CoreTags/' . $relative;
+}
+
 it('supports statamic foreach shorthand with key and value', function (): void {
     $tpl = <<<'ANTLERS'
     {{ foreach:company_info }}
@@ -12,7 +17,7 @@ it('supports statamic foreach shorthand with key and value', function (): void {
     $data = [
         'company_info' => [
             'address' => '123 Hollywood Blvd',
-            'city' => 'Beverly Hills',
+            'city'    => 'Beverly Hills',
         ],
     ];
 
@@ -26,7 +31,7 @@ it('supports statamic foreach alias syntax', function (): void {
 
     $data = ['song_reviews' => [
         'Never Gonna Give You Up' => '5/5',
-        'My Heart Will Go On' => '3/5',
+        'My Heart Will Go On'     => '3/5',
     ]];
 
     expect(engine()->render($tpl, $data))->toBe('Never Gonna Give You Up=5/5|My Heart Will Go On=3/5|');
@@ -46,84 +51,35 @@ it('supports foreach array parameter forms', function (): void {
 });
 
 it('supports partial rendering and existence checks', function (): void {
-    $dir     = sys_get_temp_dir() . '/antlers_partial_' . uniqid('', true);
-    $partial = $dir . '/card.antlers.html';
-    $wrapper = $dir . '/wrapper.antlers.html';
-
-    mkdir($dir);
-    file_put_contents($partial, '<h1>{{ title }}</h1>');
-    file_put_contents($wrapper, '{{ partial src="card.antlers.html" title="Hello" }}|{{ partial:exists src="card.antlers.html" }}|{{ partial:if_exists src="missing.antlers.html" }}');
+    $partial = fixturePath('partial/basic/card.antlers.html');
+    $wrapper = fixturePath('partial/basic/wrapper.antlers.html');
 
     expect(engine()->renderFile($partial, ['title' => 'Ignored']))->toBe('<h1>Ignored</h1>')
         ->and(engine()->renderFile($wrapper))->toBe('<h1>Hello</h1>|true|');
-
-    unlink($partial);
-    unlink($wrapper);
-    rmdir($dir);
 });
 
 it('supports extensionless partial lookup consistently across render and existence checks', function (): void {
-    $dir     = sys_get_temp_dir() . '/antlers_partial_lookup_' . uniqid('', true);
-    $partial = $dir . '/card.antlers.html';
-    $wrapper = $dir . '/wrapper.antlers.html';
-
-    mkdir($dir);
-    file_put_contents($partial, '<h1>{{ title }}</h1>');
-    file_put_contents($wrapper, '{{ partial src="card" title="Hello" }}|{{ partial:exists src="card" }}|{{ partial:if_exists src="card" title="Hello" }}');
+    $wrapper = fixturePath('partial/lookup/wrapper.antlers.html');
 
     expect(engine()->renderFile($wrapper))->toBe('<h1>Hello</h1>|true|<h1>Hello</h1>');
-
-    unlink($partial);
-    unlink($wrapper);
-    rmdir($dir);
 });
 
 it('supports partial shorthand methods and yield fallback content', function (): void {
-    $dir     = sys_get_temp_dir() . '/antlers_partial_short_' . uniqid('', true);
-    $partial = $dir . '/header.antlers.html';
-    $wrapper = $dir . '/wrapper.antlers.html';
-
-    mkdir($dir);
-    file_put_contents($partial, '<header>{{ title }}</header>');
-    file_put_contents($wrapper, '{{ partial:header title="Hello" }}|{{ yield:missing }}Fallback{{ /yield:missing }}');
+    $wrapper = fixturePath('partial/shorthand/wrapper.antlers.html');
 
     expect(engine()->renderFile($wrapper))->toBe('<header>Hello</header>|Fallback');
-
-    unlink($partial);
-    unlink($wrapper);
-    rmdir($dir);
 });
 
 it('keeps partial local parameters scoped to the partial render only', function (): void {
-    $dir     = sys_get_temp_dir() . '/antlers_partial_scope_' . uniqid('', true);
-    $partial = $dir . '/card.antlers.html';
-    $wrapper = $dir . '/wrapper.antlers.html';
-
-    mkdir($dir);
-    file_put_contents($partial, '{{ title }}');
-    file_put_contents($wrapper, '{{ partial src="card" title="Inner" }}|{{ title }}');
+    $wrapper = fixturePath('partial/scope/wrapper.antlers.html');
 
     expect(engine()->renderFile($wrapper, ['title' => 'Outer']))->toBe('Inner|Outer');
-
-    unlink($partial);
-    unlink($wrapper);
-    rmdir($dir);
 });
 
 it('does not leak assignments made inside partials back to the caller scope', function (): void {
-    $dir     = sys_get_temp_dir() . '/antlers_partial_assign_' . uniqid('', true);
-    $partial = $dir . '/card.antlers.html';
-    $wrapper = $dir . '/wrapper.antlers.html';
-
-    mkdir($dir);
-    file_put_contents($partial, '{{ title = "Inner" }}{{ title }}');
-    file_put_contents($wrapper, '{{ partial src="card" }}|{{ title }}');
+    $wrapper = fixturePath('partial/assignment/wrapper.antlers.html');
 
     expect(engine()->renderFile($wrapper, ['title' => 'Outer']))->toBe('Inner|Outer');
-
-    unlink($partial);
-    unlink($wrapper);
-    rmdir($dir);
 });
 
 it('supports section and yield tags', function (): void {
@@ -181,33 +137,11 @@ it('supports dump tag', function (): void {
 });
 
 it('supports svg tag', function (): void {
-    $dir  = sys_get_temp_dir() . '/antlers_svg_' . uniqid('', true);
-    $file = $dir . '/icon.svg';
-
-    mkdir($dir);
-    file_put_contents($file, '<svg><rect width="10" height="10"/></svg>');
-    file_put_contents($dir . '/template.antlers.html', '{{ svg src="icon.svg" }}');
-
-    expect(engine()->renderFile($dir . '/template.antlers.html'))->toBe('<svg><rect width="10" height="10"/></svg>');
-
-    unlink($file);
-    unlink($dir . '/template.antlers.html');
-    rmdir($dir);
+    expect(engine()->renderFile(fixturePath('svg/src/template.antlers.html')))->toBe('<svg><rect width="10" height="10"/></svg>');
 });
 
 it('supports svg name alias', function (): void {
-    $dir  = sys_get_temp_dir() . '/antlers_svg_name_' . uniqid('', true);
-    $file = $dir . '/icon.svg';
-
-    mkdir($dir);
-    file_put_contents($file, '<svg><circle r="4"/></svg>');
-    file_put_contents($dir . '/template.antlers.html', '{{ svg name="icon.svg" }}');
-
-    expect(engine()->renderFile($dir . '/template.antlers.html'))->toBe('<svg><circle r="4"/></svg>');
-
-    unlink($file);
-    unlink($dir . '/template.antlers.html');
-    rmdir($dir);
+    expect(engine()->renderFile(fixturePath('svg/name/template.antlers.html')))->toBe('<svg><circle r="4"/></svg>');
 });
 
 it('supports increment tag', function (): void {

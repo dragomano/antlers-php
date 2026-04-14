@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 
+function renderFileFixture(string $name): string
+{
+    return dirname(__DIR__) . '/Fixtures/RenderFile/' . $name;
+}
+
 it('renders a file with data', function (): void {
-    $path = tempnam(sys_get_temp_dir(), 'antlers_');
-    file_put_contents($path, '{{ name }}');
-
-    expect(engine()->renderFile($path, ['name' => 'Alice']))->toBe('Alice');
-
-    unlink($path);
+    expect(engine()->renderFile(renderFileFixture('name.antlers.html'), ['name' => 'Alice']))->toBe('Alice');
 });
 
 it('throws when file does not exist', function (): void {
@@ -19,52 +19,27 @@ it('throws when file does not exist', function (): void {
 });
 
 it('renders an empty file as empty string', function (): void {
-    $path = tempnam(sys_get_temp_dir(), 'antlers_');
-    file_put_contents($path, '');
-
-    expect(engine()->renderFile($path))->toBe('');
-
-    unlink($path);
+    expect(engine()->renderFile(renderFileFixture('empty.antlers.html')))->toBe('');
 });
 
 it('renders conditions from a file', function (): void {
-    $path = tempnam(sys_get_temp_dir(), 'antlers_');
-    file_put_contents($path, '{{ if active }}yes{{ else }}no{{ /if }}');
-
-    expect(engine()->renderFile($path, ['active' => true]))->toBe('yes');
-
-    unlink($path);
+    expect(engine()->renderFile(renderFileFixture('condition.antlers.html'), ['active' => true]))->toBe('yes');
 });
 
 it('applies modifiers from a file', function (): void {
-    $path = tempnam(sys_get_temp_dir(), 'antlers_');
-    file_put_contents($path, '{{ title | upper }}');
-
-    expect(engine()->renderFile($path, ['title' => 'hello']))->toBe('HELLO');
-
-    unlink($path);
+    expect(engine()->renderFile(renderFileFixture('modifier.antlers.html'), ['title' => 'hello']))->toBe('HELLO');
 });
 
 it('uses global variables in a file', function (): void {
-    $path = tempnam(sys_get_temp_dir(), 'antlers_');
-    file_put_contents($path, '{{ site }}');
-
     $e = engine();
     $e->addGlobal('site', 'MySite');
 
-    expect($e->renderFile($path))->toBe('MySite');
-
-    unlink($path);
+    expect($e->renderFile(renderFileFixture('site.antlers.html')))->toBe('MySite');
 });
 
 it('local data overrides globals in a file', function (): void {
-    $path = tempnam(sys_get_temp_dir(), 'antlers_');
-    file_put_contents($path, '{{ name }}');
-
     $e = engine();
     $e->addGlobal('name', 'Global');
 
-    expect($e->renderFile($path, ['name' => 'Local']))->toBe('Local');
-
-    unlink($path);
+    expect($e->renderFile(renderFileFixture('name.antlers.html'), ['name' => 'Local']))->toBe('Local');
 });
