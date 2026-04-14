@@ -9,6 +9,11 @@ function renderFileFixture(string $name): string
     return dirname(__DIR__) . '/Fixtures/RenderFile/' . $name;
 }
 
+function renderViewFixture(string $name): string
+{
+    return dirname(__DIR__) . '/Fixtures/RenderView/' . $name;
+}
+
 it('renders a file with data', function (): void {
     expect(engine()->renderFile(renderFileFixture('name.antlers.html'), ['name' => 'Alice']))->toBe('Alice');
 });
@@ -42,4 +47,28 @@ it('local data overrides globals in a file', function (): void {
     $e->addGlobal('name', 'Global');
 
     expect($e->renderFile(renderFileFixture('name.antlers.html'), ['name' => 'Local']))->toBe('Local');
+});
+
+it('renders a view by name from configured view paths', function (): void {
+    $e = engine();
+    $e->setViewPaths(renderViewFixture('views'));
+
+    expect(rtrim($e->renderView('pages/home', ['title' => 'Welcome'])))->toBe('Home: Welcome');
+});
+
+it('supports extensionless lookup and layout rendering for views', function (): void {
+    $e = engine();
+    $e->setViewPaths(renderViewFixture('views'));
+
+    expect(rtrim($e->renderView('pages/about', ['title' => 'About'])))->toBe('<body><h1>About</h1></body>');
+});
+
+it('falls back across multiple configured view paths', function (): void {
+    $e = engine();
+    $e->setViewPaths([
+        renderViewFixture('fallback-a'),
+        renderViewFixture('fallback-b'),
+    ]);
+
+    expect(rtrim($e->renderView('shared/message', ['name' => 'Alice'])))->toBe('Hello, Alice!');
 });

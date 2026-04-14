@@ -85,6 +85,26 @@ final class Engine
     }
 
     /**
+     * @param array<string, mixed> $data
+     */
+    public function renderView(string $name, array $data = []): string
+    {
+        $this->processor->setGlobalData($this->globalData);
+
+        return $this->processor->renderView($name, $data);
+    }
+
+    /**
+     * @param string|string[] $paths
+     */
+    public function setViewPaths(string|array $paths): self
+    {
+        $this->processor->setViewPaths($paths);
+
+        return $this;
+    }
+
+    /**
      * Register a custom tag.
      *
      * $engine->addTag('greeting', function($params, $data, $proc, $method, $children) {

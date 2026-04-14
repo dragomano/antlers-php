@@ -49,6 +49,9 @@ final class NodeProcessor
     /** @var string[] */
     private array $templatePathStack = [];
 
+    /** @var string[] */
+    private array $viewPaths = [];
+
     public function __construct(
         private readonly DocumentParser $documentParser,
         private readonly ExpressionEvaluator $evaluator,
@@ -71,6 +74,19 @@ final class NodeProcessor
         $this->strict = $strict;
 
         $this->evaluator->setStrict($strict);
+    }
+
+    /**
+     * @param string|string[] $paths
+     */
+    public function setViewPaths(string|array $paths): void
+    {
+        $paths = is_array($paths) ? $paths : [$paths];
+
+        $this->viewPaths = array_values(array_filter(array_map(
+            trim(...),
+            $paths,
+        ), static fn(string $path): bool => $path !== ''));
     }
 
     /**
@@ -546,6 +562,19 @@ final class NodeProcessor
     }
 
     /**
+     * @param array<string, mixed> $data
+     */
+    public function renderView(string $name, array $data = []): string
+    {
+        $resolved = $this->resolveViewPath($name);
+        if (! is_file($resolved)) {
+            throw new AntlersRuntimeException("Template view not found: $name");
+        }
+
+        return $this->renderTemplateFile($resolved, $data);
+    }
+
+    /**
      * @param AbstractNode[] $children
      * @param array<string, mixed> $data
      */
@@ -644,11 +673,26 @@ final class NodeProcessor
             return $path;
         }
 
-        $base = $this->templatePathStack !== []
-            ? $this->templatePathStack[count($this->templatePathStack) - 1]
-            : getcwd();
+        $candidates = [];
 
-        return rtrim((string) $base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
+        if ($this->templatePathStack !== []) {
+            $candidates[] = $this->templatePathStack[count($this->templatePathStack) - 1];
+        }
+
+        foreach ($this->viewPaths as $viewPath) {
+            $candidates[] = $viewPath;
+        }
+
+        $candidates[] = (string) getcwd();
+
+        foreach ($candidates as $base) {
+            $resolved = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
+            if (is_file($resolved)) {
+                return $resolved;
+            }
+        }
+
+        return rtrim($candidates[0], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
     }
 
     /**
@@ -669,6 +713,34 @@ final class NodeProcessor
     public function pathExists(string $path, array $scope): bool
     {
         return $this->paths->has($path, $scope);
+    }
+
+    private function resolveViewPath(string $name): string
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return $name;
+        }
+
+        $candidates = [$name];
+
+        $basename = basename($name);
+        if (! str_contains($basename, '.')) {
+            $candidates[] = $name . '.antlers.html';
+        }
+
+        foreach ($this->viewPaths as $base) {
+            foreach ($candidates as $candidate) {
+                $resolved = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $candidate;
+                if (is_file($resolved)) {
+                    return $resolved;
+                }
+            }
+        }
+
+        return $this->viewPaths !== []
+            ? rtrim($this->viewPaths[0], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $candidates[0]
+            : $this->resolveTemplatePath($candidates[0]);
     }
 
     /**
