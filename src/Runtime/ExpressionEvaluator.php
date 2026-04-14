@@ -545,7 +545,7 @@ final class ExpressionEvaluator
      */
     private function sortDirection(?AbstractNode $direction, array $scope): string
     {
-        if ($direction === null) {
+        if (! $direction instanceof AbstractNode) {
             return 'asc';
         }
 

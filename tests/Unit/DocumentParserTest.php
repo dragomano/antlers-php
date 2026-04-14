@@ -7,8 +7,8 @@ use Bugo\Antlers\Nodes\AntlersNode;
 use Bugo\Antlers\Nodes\LiteralNode;
 use Bugo\Antlers\Parser\DocumentParser;
 
-describe('DocumentParser', function () {
-    beforeEach(function () {
+describe('DocumentParser', function (): void {
+    beforeEach(function (): void {
         $this->parser = new DocumentParser();
     });
 

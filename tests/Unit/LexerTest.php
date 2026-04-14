@@ -6,8 +6,8 @@ use Bugo\Antlers\Parser\Lexer;
 use Bugo\Antlers\Parser\Token;
 use Bugo\Antlers\Parser\TokenType;
 
-describe('Lexer', function () {
-    beforeEach(function () {
+describe('Lexer', function (): void {
+    beforeEach(function (): void {
         $this->lexer = new Lexer();
     });
 

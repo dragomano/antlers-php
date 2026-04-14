@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 use Bugo\Antlers\Runtime\PathDataManager;
 
-describe('PathDataManager', function () {
-    beforeEach(function () {
+describe('PathDataManager', function (): void {
+    beforeEach(function (): void {
         $this->pathDataManager = new PathDataManager();
     });
 

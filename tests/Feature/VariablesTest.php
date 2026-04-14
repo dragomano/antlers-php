@@ -74,3 +74,15 @@ it('merges global and local data with local taking precedence', function (): voi
     $e->addGlobal('greeting', 'Hello');
     expect($e->render('{{ greeting }}, {{ name }}!', ['name' => 'World']))->toBe('Hello, World!');
 });
+
+it('assigns values with expression syntax without rendering them directly', function (): void {
+    expect(engine()->render('{{ items = songs }}{{ items[1] }}', [
+        'songs' => ['a', 'b', 'c'],
+    ]))->toBe('b');
+});
+
+it('supports self-iterating assignments for iterable expressions', function (): void {
+    expect(engine()->render('{{ items = songs take (2) }}{{ value }}|{{ /items }}', [
+        'songs' => ['a', 'b', 'c'],
+    ]))->toBe('a|b|');
+});

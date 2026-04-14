@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Nodes\AssignmentNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\CollectionOperationNode;
 use Bugo\Antlers\Nodes\GatekeeperNode;
@@ -10,8 +11,8 @@ use Bugo\Antlers\Nodes\NullCoalesceNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Parser\LanguageParser;
 
-describe('LanguageParser', function () {
-    beforeEach(function () {
+describe('LanguageParser', function (): void {
+    beforeEach(function (): void {
         $this->languageParser = new LanguageParser();
     });
 
@@ -66,5 +67,14 @@ describe('LanguageParser', function () {
         expect($node)->toBeInstanceOf(ModifierChainNode::class)
             ->and($node->modifiers[0]->name)->toBe('truncate')
             ->and($node->modifiers[0]->params)->toHaveCount(2);
+    });
+
+    it('parses assignments after collection and modifier expressions', function (): void {
+        $node = $this->languageParser->parseExpression('items = songs take (2) | reverse');
+
+        expect($node)->toBeInstanceOf(AssignmentNode::class)
+            ->and($node->variableName)->toBe('items')
+            ->and($node->value)->toBeInstanceOf(ModifierChainNode::class)
+            ->and($node->value->value)->toBeInstanceOf(CollectionOperationNode::class);
     });
 });

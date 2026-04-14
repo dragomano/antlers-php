@@ -7,6 +7,7 @@ namespace Bugo\Antlers\Parser;
 use Bugo\Antlers\Exceptions\AntlersSyntaxException;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\AntlersNode;
+use Bugo\Antlers\Nodes\AssignmentNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\BooleanNode;
 use Bugo\Antlers\Nodes\CollectionGroupArgument;
@@ -127,8 +128,14 @@ final class LanguageParser
             return $this->parseTagNode($node);
         }
 
-        // Default: parse as expression (variable, arithmetic, modifier chain, etc.)
-        return $this->parseExpression($raw);
+        // Default: parse as expression (variable, arithmetic, modifier chain, assignment, etc.)
+        $parsed = $this->parseExpression($raw);
+
+        if ($parsed instanceof AssignmentNode && $node->children !== []) {
+            $parsed->children = $this->processChildren($node->children);
+        }
+
+        return $parsed;
     }
 
     private function parseConditionNode(AntlersNode $blockNode): ConditionNode
@@ -398,7 +405,24 @@ final class LanguageParser
         $this->tokens = $this->lexer->tokenize($input);
         $this->pos    = 0;
 
-        return $this->parsePipedExpression();
+        return $this->parseAssignmentExpression();
+    }
+
+    private function parseAssignmentExpression(): AbstractNode
+    {
+        $expr = $this->parsePipedExpression();
+
+        if (! $this->peek()->is(TokenType::Equals)) {
+            return $expr;
+        }
+
+        if (! $expr instanceof VariableNode) {
+            throw new AntlersSyntaxException('Assignment target must be a variable path');
+        }
+
+        $this->consume(TokenType::Equals);
+
+        return new AssignmentNode($expr->path, $this->parseAssignmentExpression());
     }
 
     private function parsePipedExpression(): AbstractNode

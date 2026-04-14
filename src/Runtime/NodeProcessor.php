@@ -7,6 +7,7 @@ namespace Bugo\Antlers\Runtime;
 use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\AntlersNode;
+use Bugo\Antlers\Nodes\AssignmentNode;
 use Bugo\Antlers\Nodes\ConditionNode;
 use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\LiteralNode;
@@ -20,6 +21,7 @@ use Bugo\Antlers\Nodes\VariableNode;
 use Bugo\Antlers\Parser\DocumentParser;
 use Bugo\Antlers\Parser\LanguageParser;
 use Bugo\Antlers\Tags\TagRegistry;
+use Traversable;
 
 /**
  * Stage 4: Walks the parsed AST, evaluates nodes, and produces the final string output.
@@ -137,6 +139,19 @@ final class NodeProcessor
             return '';
         }
 
+        if ($node instanceof AssignmentNode) {
+            /** @var mixed $value */
+            $value = $this->evaluator->evaluate($node->value, $scope);
+
+            $this->scopeStack[count($this->scopeStack) - 1][$node->variableName] = $value;
+
+            if ($node->children === []) {
+                return '';
+            }
+
+            return $this->processPairedValue($value, $node->children);
+        }
+
         if ($node instanceof TagNode) {
             return $this->processTag($node, $scope);
         }
@@ -181,6 +196,10 @@ final class NodeProcessor
 
             // Could be a paired tag in the registry
             if ($parsed instanceof TagNode && $this->tags->has($parsed->name)) {
+                return $this->processNode($parsed, $scope);
+            }
+
+            if ($parsed instanceof AssignmentNode) {
                 return $this->processNode($parsed, $scope);
             }
 
@@ -438,14 +457,26 @@ final class NodeProcessor
     {
         $value = $this->resolvePathResult($path, $scope);
 
-        if (is_array($value->value) && $value->value !== []) {
+        return $this->processPairedValue($value->value, $children);
+    }
+
+    /**
+     * @param AbstractNode[] $children
+     */
+    private function processPairedValue(mixed $value, array $children): string
+    {
+        if ($value instanceof Traversable) {
+            return $this->iterateItems($value, $children);
+        }
+
+        if (is_array($value) && $value !== []) {
             // Check if it's a list (numeric keys) or associative array
-            if (array_is_list($value->value)) {
-                return $this->iterateItems($value->value, $children);
+            if (array_is_list($value)) {
+                return $this->iterateItems($value, $children);
             }
 
             // Single associative item — render with merged scope
-            $this->pushScope($this->normalizeScopeFrame($value->value));
+            $this->pushScope($this->normalizeScopeFrame($value));
 
             $output = $this->processNodes($children);
 
@@ -454,7 +485,7 @@ final class NodeProcessor
             return $output;
         }
 
-        if ($this->evaluator->isTruthy($value->value)) {
+        if ($this->evaluator->isTruthy($value)) {
             // Scalar or object — just render children with current scope
             $this->pushScope([]);
 
