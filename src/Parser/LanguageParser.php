@@ -113,6 +113,7 @@ final class LanguageParser
             'section',
             'yield',
             'partial',
+            'layout',
             'dump',
             'svg',
             'increment',
@@ -123,6 +124,7 @@ final class LanguageParser
         if (str_starts_with($node->name, 'scope:')
             || str_starts_with($node->name, 'section:')
             || str_starts_with($node->name, 'yield:')
+            || str_starts_with($node->name, 'layout:')
             || str_starts_with($node->name, 'markdown:')
         ) {
             return $this->parseTagNode($node);

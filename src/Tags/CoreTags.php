@@ -17,6 +17,7 @@ final class CoreTags
     {
         $registry->register('foreach', self::foreachTag(...));
         $registry->register('partial', self::partialTag(...));
+        $registry->register('layout', self::layoutTag(...));
         $registry->register('section', self::sectionTag(...));
         $registry->register('yield', self::yieldTag(...));
         $registry->register('markdown', self::markdownTag(...));
@@ -82,6 +83,34 @@ final class CoreTags
             'if_exists' => $exists ? $processor->renderTemplateFile($resolved, self::partialData($params, $data)) : '',
             default     => $processor->renderTemplateFile(self::fallbackTemplatePath($processor, $paths), self::partialData($params, $data)),
         };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $data
+     * @param AbstractNode[] $children
+     */
+    private static function layoutTag(
+        array $params,
+        array $data,
+        NodeProcessor $processor,
+        string $method,
+        array $children,
+    ): string {
+        $paths = self::layoutPaths($params, $method);
+        if ($paths === []) {
+            return $processor->renderFragment($children, $data);
+        }
+
+        $content = $processor->renderFragment($children, $data);
+
+        $layoutData = array_merge(
+            $data,
+            self::layoutData($params),
+            ['template_content' => $content],
+        );
+
+        return $processor->renderTemplateFile(self::fallbackTemplatePath($processor, $paths), $layoutData);
     }
 
     /**
@@ -339,6 +368,22 @@ final class CoreTags
 
     /**
      * @param array<string, mixed> $params
+     * @return list<string>
+     */
+    private static function layoutPaths(array $params, string $method): array
+    {
+        $path = self::parameterValue($params, 'src', 'path', 'name', 'layout');
+        if (is_string($path->value) && $path->value !== '') {
+            return self::templatePathCandidates($path->value);
+        }
+
+        return $method !== 'index'
+            ? self::templatePathCandidates($method)
+            : [];
+    }
+
+    /**
+     * @param array<string, mixed> $params
      * @param array<string, mixed> $data
      * @return array<string, mixed>
      */
@@ -347,6 +392,17 @@ final class CoreTags
         unset($params['src'], $params['path'], $params['name']);
 
         return array_merge($data, $params);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private static function layoutData(array $params): array
+    {
+        unset($params['src'], $params['path'], $params['name'], $params['layout']);
+
+        return $params;
     }
 
     /**

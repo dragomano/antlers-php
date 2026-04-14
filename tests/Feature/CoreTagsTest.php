@@ -70,6 +70,19 @@ it('supports partial shorthand methods and yield fallback content', function ():
     expect(engine()->renderFile($wrapper))->toBe('<header>Hello</header>|Fallback');
 });
 
+it('supports layout rendering with template_content', function (): void {
+    $child = fixturePath('layout/basic/child.antlers.html');
+
+    expect(rtrim(engine()->renderFile($child, ['title' => 'Welcome'])))->toBe('<body><main>Welcome</main></body>');
+});
+
+it('supports sections inside layouts and passes layout parameters', function (): void {
+    $child = fixturePath('layout/sections/child.antlers.html');
+
+    expect(rtrim(engine()->renderFile($child, ['title' => 'Welcome', 'body' => 'Body copy'])))
+        ->toBe('<h1>Welcome</h1>|<aside>blue</aside>|<p>Body copy</p>');
+});
+
 it('keeps partial local parameters scoped to the partial render only', function (): void {
     $wrapper = fixturePath('partial/scope/wrapper.antlers.html');
 
