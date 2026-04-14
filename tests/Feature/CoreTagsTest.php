@@ -49,6 +49,7 @@ it('supports partial rendering and existence checks', function (): void {
     $dir     = sys_get_temp_dir() . '/antlers_partial_' . uniqid('', true);
     $partial = $dir . '/card.antlers.html';
     $wrapper = $dir . '/wrapper.antlers.html';
+
     mkdir($dir);
     file_put_contents($partial, '<h1>{{ title }}</h1>');
     file_put_contents($wrapper, '{{ partial src="card.antlers.html" title="Hello" }}|{{ partial:exists src="card.antlers.html" }}|{{ partial:if_exists src="missing.antlers.html" }}');
@@ -61,15 +62,64 @@ it('supports partial rendering and existence checks', function (): void {
     rmdir($dir);
 });
 
+it('supports extensionless partial lookup consistently across render and existence checks', function (): void {
+    $dir     = sys_get_temp_dir() . '/antlers_partial_lookup_' . uniqid('', true);
+    $partial = $dir . '/card.antlers.html';
+    $wrapper = $dir . '/wrapper.antlers.html';
+
+    mkdir($dir);
+    file_put_contents($partial, '<h1>{{ title }}</h1>');
+    file_put_contents($wrapper, '{{ partial src="card" title="Hello" }}|{{ partial:exists src="card" }}|{{ partial:if_exists src="card" title="Hello" }}');
+
+    expect(engine()->renderFile($wrapper))->toBe('<h1>Hello</h1>|true|<h1>Hello</h1>');
+
+    unlink($partial);
+    unlink($wrapper);
+    rmdir($dir);
+});
+
 it('supports partial shorthand methods and yield fallback content', function (): void {
     $dir     = sys_get_temp_dir() . '/antlers_partial_short_' . uniqid('', true);
     $partial = $dir . '/header.antlers.html';
     $wrapper = $dir . '/wrapper.antlers.html';
+
     mkdir($dir);
     file_put_contents($partial, '<header>{{ title }}</header>');
     file_put_contents($wrapper, '{{ partial:header title="Hello" }}|{{ yield:missing }}Fallback{{ /yield:missing }}');
 
     expect(engine()->renderFile($wrapper))->toBe('<header>Hello</header>|Fallback');
+
+    unlink($partial);
+    unlink($wrapper);
+    rmdir($dir);
+});
+
+it('keeps partial local parameters scoped to the partial render only', function (): void {
+    $dir     = sys_get_temp_dir() . '/antlers_partial_scope_' . uniqid('', true);
+    $partial = $dir . '/card.antlers.html';
+    $wrapper = $dir . '/wrapper.antlers.html';
+
+    mkdir($dir);
+    file_put_contents($partial, '{{ title }}');
+    file_put_contents($wrapper, '{{ partial src="card" title="Inner" }}|{{ title }}');
+
+    expect(engine()->renderFile($wrapper, ['title' => 'Outer']))->toBe('Inner|Outer');
+
+    unlink($partial);
+    unlink($wrapper);
+    rmdir($dir);
+});
+
+it('does not leak assignments made inside partials back to the caller scope', function (): void {
+    $dir     = sys_get_temp_dir() . '/antlers_partial_assign_' . uniqid('', true);
+    $partial = $dir . '/card.antlers.html';
+    $wrapper = $dir . '/wrapper.antlers.html';
+
+    mkdir($dir);
+    file_put_contents($partial, '{{ title = "Inner" }}{{ title }}');
+    file_put_contents($wrapper, '{{ partial src="card" }}|{{ title }}');
+
+    expect(engine()->renderFile($wrapper, ['title' => 'Outer']))->toBe('Inner|Outer');
 
     unlink($partial);
     unlink($wrapper);
@@ -133,6 +183,7 @@ it('supports dump tag', function (): void {
 it('supports svg tag', function (): void {
     $dir  = sys_get_temp_dir() . '/antlers_svg_' . uniqid('', true);
     $file = $dir . '/icon.svg';
+
     mkdir($dir);
     file_put_contents($file, '<svg><rect width="10" height="10"/></svg>');
     file_put_contents($dir . '/template.antlers.html', '{{ svg src="icon.svg" }}');
@@ -147,6 +198,7 @@ it('supports svg tag', function (): void {
 it('supports svg name alias', function (): void {
     $dir  = sys_get_temp_dir() . '/antlers_svg_name_' . uniqid('', true);
     $file = $dir . '/icon.svg';
+
     mkdir($dir);
     file_put_contents($file, '<svg><circle r="4"/></svg>');
     file_put_contents($dir . '/template.antlers.html', '{{ svg name="icon.svg" }}');

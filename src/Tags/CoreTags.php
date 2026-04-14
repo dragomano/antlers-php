@@ -69,18 +69,18 @@ final class CoreTags
         NodeProcessor $processor,
         string $method,
     ): string|bool {
-        $path = self::partialPath($params, $method);
-        if ($path === null) {
+        $paths = self::partialPaths($params, $method);
+        if ($paths === []) {
             return $method === 'exists' ? false : '';
         }
 
-        $resolved = $processor->resolveTemplatePath($path);
-        $exists   = is_file($resolved);
+        $resolved = self::firstExistingTemplatePath($processor, $paths);
+        $exists   = $resolved !== null;
 
         return match ($method) {
             'exists'    => $exists,
             'if_exists' => $exists ? $processor->renderTemplateFile($resolved, self::partialData($params, $data)) : '',
-            default     => $processor->renderTemplateFile($resolved, self::partialData($params, $data)),
+            default     => $processor->renderTemplateFile(self::fallbackTemplatePath($processor, $paths), self::partialData($params, $data)),
         };
     }
 
@@ -320,19 +320,20 @@ final class CoreTags
 
     /**
      * @param array<string, mixed> $params
+     * @return list<string>
      */
-    private static function partialPath(array $params, string $method): ?string
+    private static function partialPaths(array $params, string $method): array
     {
         $path = self::svgPath($params);
         if (is_string($path->value) && $path->value !== '') {
-            return $path->value;
+            return self::templatePathCandidates($path->value);
         }
 
         return match ($method) {
             'index',
             'exists',
-            'if_exists' => null,
-            default     => str_contains($method, '.') ? $method : $method . '.antlers.html',
+            'if_exists' => [],
+            default     => self::templatePathCandidates($method),
         };
     }
 
@@ -346,6 +347,54 @@ final class CoreTags
         unset($params['src'], $params['path'], $params['name']);
 
         return array_merge($data, $params);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function templatePathCandidates(string $path): array
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return [];
+        }
+
+        $candidates = [$path];
+
+        $basename = basename($path);
+        if (! str_contains($basename, '.')) {
+            $candidates[] = $path . '.antlers.html';
+        }
+
+        return array_values(array_unique($candidates));
+    }
+
+    /**
+     * @param list<string> $paths
+     */
+    private static function firstExistingTemplatePath(NodeProcessor $processor, array $paths): ?string
+    {
+        foreach ($paths as $path) {
+            $resolved = $processor->resolveTemplatePath($path);
+            if (is_file($resolved)) {
+                return $resolved;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<string> $paths
+     */
+    private static function fallbackTemplatePath(NodeProcessor $processor, array $paths): string
+    {
+        $resolved = self::firstExistingTemplatePath($processor, $paths);
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
+        return $processor->resolveTemplatePath($paths[0]);
     }
 
     /**
