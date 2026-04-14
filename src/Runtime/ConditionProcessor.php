@@ -19,7 +19,7 @@ final readonly class ConditionProcessor
      * @param array<string, mixed> $scope
      * @return AbstractNode[] The children of the matching branch, or [] if none match
      */
-    public function process(ConditionNode $node, array $scope): array
+    public function process(ConditionNode $node, array $scope, ?callable $assignmentWriter = null): array
     {
         foreach ($node->branches as $branch) {
             if ($branch->type === 'else') {
@@ -30,7 +30,7 @@ final readonly class ConditionProcessor
                 continue;
             }
 
-            $truthy = $this->evaluator->evaluateTruthy($branch->condition, $scope);
+            $truthy = $this->evaluator->evaluateTruthy($branch->condition, $scope, $assignmentWriter);
 
             // 'unless' inverts the condition
             if ($branch->type === 'unless') {

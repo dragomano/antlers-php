@@ -56,6 +56,7 @@ enum TokenType: string
 
     // Structure
     case Comma      = 'T_COMMA';        // ,
+    case Semicolon  = 'T_SEMICOLON';    // ;
     case Arrow      = 'T_ARROW';        // =>
     case As         = 'T_AS';           // as keyword
 

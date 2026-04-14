@@ -8,6 +8,7 @@ use Bugo\Antlers\Nodes\CollectionOperationNode;
 use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
+use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Parser\LanguageParser;
 
@@ -76,5 +77,14 @@ describe('LanguageParser', function (): void {
             ->and($node->variableName)->toBe('items')
             ->and($node->value)->toBeInstanceOf(ModifierChainNode::class)
             ->and($node->value->value)->toBeInstanceOf(CollectionOperationNode::class);
+    });
+
+    it('parses semicolon-separated statements into a sequence node', function (): void {
+        $node = $this->languageParser->parseExpression('items = songs; items | reverse');
+
+        expect($node)->toBeInstanceOf(SequenceNode::class)
+            ->and($node->statements)->toHaveCount(2)
+            ->and($node->statements[0])->toBeInstanceOf(AssignmentNode::class)
+            ->and($node->statements[1])->toBeInstanceOf(ModifierChainNode::class);
     });
 });

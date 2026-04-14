@@ -156,6 +156,7 @@ final class Lexer
                 '['     => $this->add(TokenType::LBracket, '['),
                 ']'     => $this->add(TokenType::RBracket, ']'),
                 ','     => $this->add(TokenType::Comma, ','),
+                ';'     => $this->add(TokenType::Semicolon, ';'),
                 '|'     => $this->add(TokenType::Pipe, '|'),
                 ':'     => $this->add(TokenType::Colon, ':'),
                 '.'     => $this->add(TokenType::Dot, '.'),

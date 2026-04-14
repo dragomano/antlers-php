@@ -14,6 +14,7 @@ use Bugo\Antlers\Nodes\LiteralNode;
 use Bugo\Antlers\Nodes\LoopNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
+use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\SetNode;
 use Bugo\Antlers\Nodes\TagNode;
 use Bugo\Antlers\Nodes\TernaryNode;
@@ -134,22 +135,34 @@ final class NodeProcessor
 
             // Update current scope frame
             $this->scopeStack[count($this->scopeStack) - 1][$node->variableName]
-                = $this->evaluator->evaluate($node->value, $scope);
+                = $this->evaluateNodeValue($node->value, $scope);
 
             return '';
         }
 
         if ($node instanceof AssignmentNode) {
-            /** @var mixed $value */
-            $value = $this->evaluator->evaluate($node->value, $scope);
+            $result = $this->evaluateNodeResult($node->value, $scope);
 
-            $this->scopeStack[count($this->scopeStack) - 1][$node->variableName] = $value;
+            $this->writeScopeValue($node->variableName, $result->value);
 
             if ($node->children === []) {
                 return '';
             }
 
-            return $this->processPairedValue($value, $node->children);
+            return $this->processPairedValue($result->value, $node->children);
+        }
+
+        if ($node instanceof SequenceNode) {
+            $result = $this->evaluateNodeResult($node, $scope);
+
+            $lastStatementKey = array_key_last($node->statements);
+            $lastStatement    = $lastStatementKey !== null ? $node->statements[$lastStatementKey] : null;
+
+            if ($lastStatement instanceof AssignmentNode) {
+                return '';
+            }
+
+            return $this->evaluator->stringify($result->value);
         }
 
         if ($node instanceof TagNode) {
@@ -232,7 +245,7 @@ final class NodeProcessor
      */
     private function processCondition(ConditionNode $node, array $scope): string
     {
-        $children = $this->conditions->process($node, $scope);
+        $children = $this->conditions->process($node, $scope, $this->assignmentWriter());
         if ($children === []) {
             return '';
         }
@@ -275,7 +288,7 @@ final class NodeProcessor
             return '';
         }
 
-        $items = $this->evaluator->evaluate($node->iterable, $scope);
+        $items = $this->evaluateNodeValue($node->iterable, $scope);
 
         if (! is_iterable($items)) {
             return '';
@@ -293,8 +306,8 @@ final class NodeProcessor
             return '';
         }
 
-        $from = $this->toInt($this->evaluator->evaluate($node->from, $scope));
-        $to   = $this->toInt($this->evaluator->evaluate($node->to, $scope));
+        $from = $this->toInt($this->evaluateNodeValue($node->from, $scope));
+        $to   = $this->toInt($this->evaluateNodeValue($node->to, $scope));
 
         $output = '';
         $step   = $from <= $to ? 1 : -1;
@@ -430,7 +443,7 @@ final class NodeProcessor
         }
 
         // Resolve parameter values
-        $params = array_map(fn(AbstractNode $paramNode): mixed => $this->evaluator->evaluate($paramNode, $scope), $node->parameters);
+        $params = array_map(fn(AbstractNode $paramNode): mixed => $this->evaluateNodeValue($paramNode, $scope), $node->parameters);
 
         $result = $this->handleTagResult($node, $params, $scope);
 
@@ -740,7 +753,36 @@ final class NodeProcessor
      */
     private function stringifyEvaluatedNode(AbstractNode $node, array $scope): string
     {
-        return $this->evaluator->stringify($this->evaluator->evaluate($node, $scope));
+        return $this->evaluator->stringify($this->evaluateNodeValue($node, $scope));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function evaluateNodeValue(AbstractNode $node, array $scope): mixed
+    {
+        return $this->evaluator->evaluate($node, $scope, $this->assignmentWriter());
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function evaluateNodeResult(AbstractNode $node, array $scope): ValueResult
+    {
+        return $this->evaluator->evaluateResult($node, $scope, $this->assignmentWriter());
+    }
+
+    /**
+     * @return callable(string, mixed): void
+     */
+    private function assignmentWriter(): callable
+    {
+        return $this->writeScopeValue(...);
+    }
+
+    private function writeScopeValue(string $name, mixed $value): void
+    {
+        $this->scopeStack[count($this->scopeStack) - 1][$name] = $value;
     }
 
     /**

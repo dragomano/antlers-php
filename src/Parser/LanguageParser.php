@@ -23,6 +23,7 @@ use Bugo\Antlers\Nodes\ModifierNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
 use Bugo\Antlers\Nodes\NullNode;
 use Bugo\Antlers\Nodes\NumberNode;
+use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\SetNode;
 use Bugo\Antlers\Nodes\StringValueNode;
 use Bugo\Antlers\Nodes\TagNode;
@@ -405,7 +406,53 @@ final class LanguageParser
         $this->tokens = $this->lexer->tokenize($input);
         $this->pos    = 0;
 
-        return $this->parseAssignmentExpression();
+        return $this->parseStatementSequence();
+    }
+
+    private function parseStatementSequence(TokenType $terminator = TokenType::Eof): AbstractNode
+    {
+        if ($this->peek()->is($terminator, TokenType::Eof)) {
+            throw new AntlersSyntaxException('Expected expression before statement terminator');
+        }
+
+        $statements   = [];
+        $statements[] = $this->parseAssignmentExpression();
+
+        while (true) {
+            $token = $this->peek();
+            if (! $token->is(TokenType::Semicolon)) {
+                break;
+            }
+
+            $this->advance();
+
+            $token = $this->peek();
+            while ($token->is(TokenType::Semicolon)) {
+                $this->advance();
+
+                $token = $this->peek();
+            }
+
+            if ($token->is($terminator, TokenType::Eof)) {
+                break;
+            }
+
+            $statements[] = $this->parseAssignmentExpression();
+        }
+
+        $token = $this->peek();
+        if (! $token->is($terminator, TokenType::Eof)) {
+
+            throw new AntlersSyntaxException(
+                "Unexpected token {$token->type->value} ('$token->value') in expression",
+            );
+        }
+
+        if (count($statements) === 1) {
+            return $statements[0];
+        }
+
+        return new SequenceNode($statements);
     }
 
     private function parseAssignmentExpression(): AbstractNode
@@ -579,7 +626,7 @@ final class LanguageParser
         $this->pos    = 0;
 
         try {
-            return $this->parsePipedExpression();
+            return $this->parseStatementSequence();
         } finally {
             $this->tokens = $previousTokens;
             $this->pos    = $previousPos;
@@ -614,12 +661,13 @@ final class LanguageParser
                 continue;
             }
 
-            // Stop before pipe, question, colon, comma, rparen, rbracket (handled elsewhere)
+            // Stop before pipe, question, colon, comma, semicolon, rparen, rbracket (handled elsewhere)
             if ($op->is(
                 TokenType::Pipe,
                 TokenType::Question,
                 TokenType::Colon,
                 TokenType::Comma,
+                TokenType::Semicolon,
                 TokenType::RParen,
                 TokenType::RBracket,
             )) {
@@ -666,7 +714,7 @@ final class LanguageParser
         if ($token->is(TokenType::LParen)) {
             $this->advance();
 
-            $expr = $this->parsePipedExpression();
+            $expr = $this->parseStatementSequence(TokenType::RParen);
 
             $this->consume(TokenType::RParen);
 

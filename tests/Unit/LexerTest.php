@@ -68,6 +68,10 @@ describe('Lexer', function (): void {
         expect($this->lexer->tokenize('?=')[0]->type)->toBe(TokenType::QEquals);
     });
 
+    it('tokenizes semicolon statement separators', function (): void {
+        expect($this->lexer->tokenize(';')[0]->type)->toBe(TokenType::Semicolon);
+    });
+
     it('tokenizes string literals', function (): void {
         $tokens = $this->lexer->tokenize('"hello world"');
         expect($tokens[0]->type)->toBe(TokenType::String)

@@ -86,3 +86,11 @@ it('supports self-iterating assignments for iterable expressions', function (): 
         'songs' => ['a', 'b', 'c'],
     ]))->toBe('a|b|');
 });
+
+it('supports multiple statements separated by semicolons', function (): void {
+    expect(engine()->render('{{ count = 1; count + 1 }}{{ count }}'))->toBe('21');
+});
+
+it('supports semicolon-separated sub-expressions inside parentheses', function (): void {
+    expect(engine()->render('{{ 2 * (count = 1; count + 2) }}{{ count }}'))->toBe('61');
+});
