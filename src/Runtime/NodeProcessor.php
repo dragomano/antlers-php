@@ -40,6 +40,9 @@ final class NodeProcessor
     /** @var array<string, string> */
     private array $sections = [];
 
+    /** @var array<string, string[]> */
+    private array $stacks = [];
+
     /** @var array<string, int> */
     private array $increments = [];
 
@@ -100,6 +103,7 @@ final class NodeProcessor
         $isRootRender = $this->scopeStack === [];
         if ($isRootRender) {
             $this->sections   = [];
+            $this->stacks     = [];
             $this->increments = [];
             $this->switches   = [];
         }
@@ -637,6 +641,26 @@ final class NodeProcessor
     public function yieldSection(string $name): string
     {
         return $this->sections[$name] ?? '';
+    }
+
+    public function storeStack(string $name, string $content, bool $prepend = false): void
+    {
+        if (! isset($this->stacks[$name])) {
+            $this->stacks[$name] = [];
+        }
+
+        if ($prepend) {
+            array_unshift($this->stacks[$name], $content);
+
+            return;
+        }
+
+        $this->stacks[$name][] = $content;
+    }
+
+    public function yieldStack(string $name): string
+    {
+        return implode('', $this->stacks[$name] ?? []);
     }
 
     public function nextIncrement(string $name, int $from = 1, int $step = 1): int

@@ -20,6 +20,9 @@ final class CoreTags
         $registry->register('layout', self::layoutTag(...));
         $registry->register('section', self::sectionTag(...));
         $registry->register('yield', self::yieldTag(...));
+        $registry->register('stack', self::stackTag(...));
+        $registry->register('push', self::pushTag(...));
+        $registry->register('prepend', self::prependTag(...));
         $registry->register('markdown', self::markdownTag(...));
         $registry->register('loop', self::loopTag(...));
         $registry->register('switch', self::switchTag(...));
@@ -157,6 +160,58 @@ final class CoreTags
         $content = $processor->yieldSection($name);
 
         return $content !== '' ? $content : $processor->renderFragment($children, $data);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $data
+     * @param AbstractNode[] $children
+     */
+    private static function stackTag(
+        array $params,
+        array $data,
+        NodeProcessor $processor,
+        string $method,
+        array $children,
+    ): string {
+        $name = self::sectionName($params, $method);
+        if ($name === null) {
+            return $children === [] ? '' : $processor->renderFragment($children, $data);
+        }
+
+        $content = $processor->yieldStack($name);
+
+        return $content !== '' ? $content : $processor->renderFragment($children, $data);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $data
+     * @param AbstractNode[] $children
+     */
+    private static function pushTag(
+        array $params,
+        array $data,
+        NodeProcessor $processor,
+        string $method,
+        array $children,
+    ): string {
+        return self::storeStackContent($params, $data, $processor, $method, $children);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $data
+     * @param AbstractNode[] $children
+     */
+    private static function prependTag(
+        array $params,
+        array $data,
+        NodeProcessor $processor,
+        string $method,
+        array $children,
+    ): string {
+        return self::storeStackContent($params, $data, $processor, $method, $children, true);
     }
 
     /**
@@ -464,6 +519,29 @@ final class CoreTags
         }
 
         return $method !== 'index' ? $method : null;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $data
+     * @param AbstractNode[] $children
+     */
+    private static function storeStackContent(
+        array $params,
+        array $data,
+        NodeProcessor $processor,
+        string $method,
+        array $children,
+        bool $prepend = false,
+    ): string {
+        $name = self::sectionName($params, $method);
+        if ($name === null) {
+            return '';
+        }
+
+        $processor->storeStack($name, $processor->renderFragment($children, $data), $prepend);
+
+        return '';
     }
 
     private static function string(mixed $value): string

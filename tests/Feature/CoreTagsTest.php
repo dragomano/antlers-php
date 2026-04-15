@@ -104,6 +104,25 @@ it('supports section and yield tags', function (): void {
     expect(engine()->render($tpl, ['title' => 'Welcome']))->toBe("\n<h1>Welcome</h1>");
 });
 
+it('supports push prepend and stack tags', function (): void {
+    $tpl = <<<'ANTLERS'
+    {{ push:scripts }}<script src="/app.js"></script>{{ /push:scripts }}
+    {{ prepend:scripts }}<script src="/polyfill.js"></script>{{ /prepend:scripts }}
+    {{ push name="scripts" }}<script src="/analytics.js"></script>{{ /push }}
+    {{ stack:scripts }}<p>fallback</p>{{ /stack:scripts }}
+    ANTLERS;
+
+    expect(engine()->render($tpl))->toBe(
+        "\n\n\n<script src=\"/polyfill.js\"></script><script src=\"/app.js\"></script><script src=\"/analytics.js\"></script>",
+    );
+});
+
+it('supports stack fallback content when the stack is empty', function (): void {
+    $tpl = '{{ stack:styles }}<style>.page{display:block;}</style>{{ /stack:styles }}';
+
+    expect(engine()->render($tpl))->toBe('<style>.page{display:block;}</style>');
+});
+
 it('supports markdown tags', function (): void {
     $tpl = '{{ markdown }}**Bold**{{ /markdown }}|{{ markdown:indent }}
         # Title

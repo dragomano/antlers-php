@@ -112,6 +112,9 @@ final class LanguageParser
             'loop',
             'section',
             'yield',
+            'stack',
+            'push',
+            'prepend',
             'partial',
             'layout',
             'dump',
@@ -124,6 +127,9 @@ final class LanguageParser
         if (str_starts_with($node->name, 'scope:')
             || str_starts_with($node->name, 'section:')
             || str_starts_with($node->name, 'yield:')
+            || str_starts_with($node->name, 'stack:')
+            || str_starts_with($node->name, 'push:')
+            || str_starts_with($node->name, 'prepend:')
             || str_starts_with($node->name, 'layout:')
             || str_starts_with($node->name, 'markdown:')
         ) {
