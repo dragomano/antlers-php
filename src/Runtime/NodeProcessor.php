@@ -43,6 +43,9 @@ final class NodeProcessor
     /** @var array<string, string[]> */
     private array $stacks = [];
 
+    /** @var array<string, true> */
+    private array $onceKeys = [];
+
     /** @var array<string, int> */
     private array $increments = [];
 
@@ -54,6 +57,9 @@ final class NodeProcessor
 
     /** @var string[] */
     private array $viewPaths = [];
+
+    /** @var list<array{name: string, method: string, line: int, signature: string}> */
+    private array $tagContextStack = [];
 
     public function __construct(
         private readonly DocumentParser $documentParser,
@@ -104,6 +110,7 @@ final class NodeProcessor
         if ($isRootRender) {
             $this->sections   = [];
             $this->stacks     = [];
+            $this->onceKeys   = [];
             $this->increments = [];
             $this->switches   = [];
         }
@@ -663,6 +670,21 @@ final class NodeProcessor
         return implode('', $this->stacks[$name] ?? []);
     }
 
+    /**
+     * @param callable(): string $renderer
+     */
+    public function renderOnce(?string $key, callable $renderer): string
+    {
+        $resolvedKey = $this->resolveOnceKey($key);
+        if (isset($this->onceKeys[$resolvedKey])) {
+            return '';
+        }
+
+        $this->onceKeys[$resolvedKey] = true;
+
+        return $renderer();
+    }
+
     public function nextIncrement(string $name, int $from = 1, int $step = 1): int
     {
         if (! isset($this->increments[$name])) {
@@ -899,9 +921,15 @@ final class NodeProcessor
      */
     private function handleTagResult(TagNode $node, array $params, array $scope): ValueResult
     {
-        return new ValueResult(
-            $this->tags->handle($node->name, $node->method, $params, $scope, $this, $node->children),
-        );
+        $this->pushTagContext($node);
+
+        try {
+            return new ValueResult(
+                $this->tags->handle($node->name, $node->method, $params, $scope, $this, $node->children),
+            );
+        } finally {
+            $this->popTagContext();
+        }
     }
 
     /**
@@ -911,5 +939,63 @@ final class NodeProcessor
     private function withLoopValue(array $loopVars, string $key, mixed $value): array
     {
         return array_merge($loopVars, [$key => $value]);
+    }
+
+    private function resolveOnceKey(?string $key): string
+    {
+        if ($key !== null && $key !== '') {
+            return 'named:' . $key;
+        }
+
+        $context = $this->currentTagContext();
+        if ($context === null) {
+            return 'anonymous:' . count($this->onceKeys);
+        }
+
+        return implode(':', [
+            'auto',
+            $this->currentTemplateIdentifier(),
+            $context['name'],
+            $context['method'],
+            (string) $context['line'],
+            $context['signature'],
+        ]);
+    }
+
+    private function currentTemplateIdentifier(): string
+    {
+        if ($this->templatePathStack === []) {
+            return '__inline__';
+        }
+
+        return $this->templatePathStack[count($this->templatePathStack) - 1];
+    }
+
+    private function pushTagContext(TagNode $node): void
+    {
+        $this->tagContextStack[] = [
+            'name'      => $node->name,
+            'method'    => $node->method,
+            'line'      => $node->line,
+            'signature' => hash('sha256', serialize([
+                $node->parameters,
+                $node->children,
+            ])),
+        ];
+    }
+
+    private function popTagContext(): void
+    {
+        array_pop($this->tagContextStack);
+    }
+
+    /**
+     * @return array{name: string, method: string, line: int, signature: string}|null
+     */
+    private function currentTagContext(): ?array
+    {
+        $key = array_key_last($this->tagContextStack);
+
+        return $key === null ? null : $this->tagContextStack[$key];
     }
 }

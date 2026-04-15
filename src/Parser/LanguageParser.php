@@ -115,6 +115,7 @@ final class LanguageParser
             'stack',
             'push',
             'prepend',
+            'once',
             'partial',
             'layout',
             'dump',
@@ -130,6 +131,7 @@ final class LanguageParser
             || str_starts_with($node->name, 'stack:')
             || str_starts_with($node->name, 'push:')
             || str_starts_with($node->name, 'prepend:')
+            || str_starts_with($node->name, 'once:')
             || str_starts_with($node->name, 'layout:')
             || str_starts_with($node->name, 'markdown:')
         ) {

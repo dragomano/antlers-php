@@ -123,6 +123,24 @@ it('supports stack fallback content when the stack is empty', function (): void 
     expect(engine()->render($tpl))->toBe('<style>.page{display:block;}</style>');
 });
 
+it('supports once blocks only once per render pass', function (): void {
+    $tpl = <<<'ANTLERS'
+    {{ loop times="3" }}{{ once }}<script src="/app.js"></script>{{ /once }}{{ /loop }}
+    ANTLERS;
+
+    expect(engine()->render($tpl))->toBe('<script src="/app.js"></script>');
+});
+
+it('supports keyed once blocks across different locations', function (): void {
+    $tpl = <<<'ANTLERS'
+    {{ once:scripts }}<script src="/app.js"></script>{{ /once:scripts }}
+    {{ once name="scripts" }}<script src="/app.js"></script>{{ /once }}
+    {{ once:styles }}<style>.page{display:block;}</style>{{ /once:styles }}
+    ANTLERS;
+
+    expect(engine()->render($tpl))->toBe("<script src=\"/app.js\"></script>\n\n<style>.page{display:block;}</style>");
+});
+
 it('supports markdown tags', function (): void {
     $tpl = '{{ markdown }}**Bold**{{ /markdown }}|{{ markdown:indent }}
         # Title

@@ -23,6 +23,7 @@ final class CoreTags
         $registry->register('stack', self::stackTag(...));
         $registry->register('push', self::pushTag(...));
         $registry->register('prepend', self::prependTag(...));
+        $registry->register('once', self::onceTag(...));
         $registry->register('markdown', self::markdownTag(...));
         $registry->register('loop', self::loopTag(...));
         $registry->register('switch', self::switchTag(...));
@@ -212,6 +213,26 @@ final class CoreTags
         array $children,
     ): string {
         return self::storeStackContent($params, $data, $processor, $method, $children, true);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $data
+     * @param AbstractNode[] $children
+     */
+    private static function onceTag(
+        array $params,
+        array $data,
+        NodeProcessor $processor,
+        string $method,
+        array $children,
+    ): string {
+        $key = self::sectionName($params, $method);
+
+        return $processor->renderOnce(
+            $key,
+            static fn(): string => $processor->renderFragment($children, $data),
+        );
     }
 
     /**
