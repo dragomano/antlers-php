@@ -63,6 +63,22 @@ it('renders escaped antlers as literal', function (): void {
     expect(engine()->render('@{{ name }}', ['name' => 'Alice']))->toBe('{{ name }}');
 });
 
+it('renders noparse blocks as raw literal content', function (): void {
+    expect(engine()->render('{{ noparse }}{{ name }}{{ /noparse }}', ['name' => 'Alice']))->toBe('{{ name }}');
+});
+
+it('supports nested noparse blocks without parsing inner tags', function (): void {
+    $tpl = '{{ noparse }}before {{ noparse }}{{ name }}{{ /noparse }} after{{ /noparse }}';
+
+    expect(engine()->render($tpl, ['name' => 'Alice']))->toBe('before {{ noparse }}{{ name }}{{ /noparse }} after');
+});
+
+it('supports noparse blocks adjacent to rendered tags', function (): void {
+    $tpl = '{{ noparse }}{{ name }}{{ /noparse }}|{{ name }}';
+
+    expect(engine()->render($tpl, ['name' => 'Alice']))->toBe('{{ name }}|Alice');
+});
+
 it('renders global data', function (): void {
     $e = engine();
     $e->setGlobals(['site' => 'My Blog']);

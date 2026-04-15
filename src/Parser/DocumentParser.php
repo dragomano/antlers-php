@@ -26,7 +26,7 @@ final class DocumentParser
     // Tags that are always block-level (require a closing {{ /tag }})
     private const BUILTIN_BLOCKS = [
         'if', 'unless', 'foreach', 'for',
-        'noparse', 'cache', 'markdown',
+        'cache', 'markdown',
     ];
 
     // Tags that are always self-closing (never paired)
@@ -58,6 +58,7 @@ final class DocumentParser
             // Escaped antlers: @{{ ... }}  →  emit as literal {{ ... }}
             if ($this->matchAt('@{{')) {
                 $this->flushLiteral($literalStart, $this->pos);
+
                 $this->pos += 3;
 
                 $end = strpos($this->template, '}}', $this->pos);
@@ -69,7 +70,8 @@ final class DocumentParser
                 $inner = substr($this->template, $this->pos, $end - $this->pos);
 
                 $this->nodes[] = $this->makeLiteral('{{' . $inner . '}}');
-                $this->pos     = $end + 2;
+
+                $this->pos = $end + 2;
 
                 $literalStart = $this->pos;
 
@@ -79,6 +81,7 @@ final class DocumentParser
             // Comment: {{# ... #}}
             if ($this->matchAt('{{#')) {
                 $this->flushLiteral($literalStart, $this->pos);
+
                 $this->pos += 3;
 
                 $end = strpos($this->template, '#}}', $this->pos);
@@ -88,7 +91,8 @@ final class DocumentParser
                 }
 
                 $this->line += substr_count(substr($this->template, $this->pos, $end - $this->pos), "\n");
-                $this->pos   = $end + 3;
+
+                $this->pos = $end + 3;
 
                 $literalStart = $this->pos;
 
@@ -97,7 +101,18 @@ final class DocumentParser
 
             // Antlers block: {{ ... }}
             if ($this->matchAt('{{')) {
+                if ($this->isNoparseStart()) {
+                    $this->flushLiteral($literalStart, $this->pos);
+
+                    $this->nodes[] = $this->readNoparseBlock();
+
+                    $literalStart = $this->pos;
+
+                    continue;
+                }
+
                 $this->flushLiteral($literalStart, $this->pos);
+
                 $this->pos += 2;
 
                 $node = $this->readAntlersBlock();
@@ -132,7 +147,8 @@ final class DocumentParser
         $raw = substr($this->template, $this->pos, $end - $this->pos);
 
         $this->line += substr_count($raw, "\n");
-        $this->pos   = $end + 2;
+
+        $this->pos = $end + 2;
 
         $trimmed = trim($raw);
         if ($trimmed === '') {
@@ -146,6 +162,86 @@ final class DocumentParser
         $node->name         = $this->extractTagName($trimmed);
 
         return $node;
+    }
+
+    private function readNoparseBlock(): AntlersNode
+    {
+        $startLine = $this->line;
+
+        $this->pos += 2;
+
+        $openEnd = strpos($this->template, '}}', $this->pos);
+        if ($openEnd === false) {
+            throw new AntlersSyntaxException('Unclosed Antlers tag {{', $this->line);
+        }
+
+        $openingRaw = substr($this->template, $this->pos, $openEnd - $this->pos);
+
+        $this->line += substr_count($openingRaw, "\n");
+
+        $this->pos = $openEnd + 2;
+
+        $contentStart = $this->pos;
+        $depth        = 1;
+
+        while ($this->pos < $this->length) {
+            $nextOpen = strpos($this->template, '{{', $this->pos);
+            if ($nextOpen === false) {
+                throw new AntlersSyntaxException('Unclosed noparse block {{ noparse }}', $startLine);
+            }
+
+            $this->line += substr_count(substr($this->template, $this->pos, $nextOpen - $this->pos), "\n");
+
+            $this->pos = $nextOpen + 2;
+
+            $end = strpos($this->template, '}}', $this->pos);
+            if ($end === false) {
+                throw new AntlersSyntaxException('Unclosed Antlers tag {{', $this->line);
+            }
+
+            $raw     = substr($this->template, $this->pos, $end - $this->pos);
+            $trimmed = trim($raw);
+
+            $this->line += substr_count($raw, "\n");
+
+            $this->pos = $end + 2;
+
+            if ($trimmed === 'noparse') {
+                $depth++;
+
+                continue;
+            }
+
+            if ($trimmed !== '/noparse') {
+                continue;
+            }
+
+            $depth--;
+
+            if ($depth !== 0) {
+                continue;
+            }
+
+            $node             = new AntlersNode();
+            $node->rawContent = 'noparse';
+            $node->line       = $startLine;
+            $node->name       = 'noparse';
+            $node->children[] = new LiteralNode(substr($this->template, $contentStart, $nextOpen - $contentStart));
+
+            return $node;
+        }
+
+        throw new AntlersSyntaxException('Unclosed noparse block {{ noparse }}', $startLine);
+    }
+
+    private function isNoparseStart(): bool
+    {
+        $end = strpos($this->template, '}}', $this->pos + 2);
+        if ($end === false) {
+            return false;
+        }
+
+        return trim(substr($this->template, $this->pos + 2, $end - ($this->pos + 2))) === 'noparse';
     }
 
     private function extractTagName(string $content): string
@@ -171,7 +267,7 @@ final class DocumentParser
 
     private function makeLiteral(string $content): LiteralNode
     {
-        $node       = new LiteralNode($content);
+        $node = new LiteralNode($content);
         $node->line = $this->line;
 
         return $node;
