@@ -85,11 +85,12 @@ final class CoreTags
         $resolved = self::firstExistingTemplatePath($processor, $paths);
         $exists   = $resolved !== null;
         $slotData = self::slotData($processor, $data, $children);
+        $fallback = self::fallbackTemplatePath($processor, $paths);
 
         return match ($method) {
             'exists'    => $exists,
             'if_exists' => $exists ? $processor->renderTemplateFile($resolved, self::partialData($params, $data, $slotData)) : '',
-            default     => $processor->renderTemplateFile(self::fallbackTemplatePath($processor, $paths), self::partialData($params, $data, $slotData)),
+            default     => $fallback !== '' ? $processor->renderTemplateFile($fallback, self::partialData($params, $data, $slotData)) : '',
         };
     }
 
@@ -374,7 +375,11 @@ final class CoreTags
             return '';
         }
 
-        $resolved = $processor->resolveTemplatePath($path->value);
+        $resolved = $processor->resolveTemplateTagPath($path->value);
+        if ($resolved === '') {
+            return '';
+        }
+
         if (! is_file($resolved)) {
             return '';
         }
@@ -537,8 +542,8 @@ final class CoreTags
     private static function firstExistingTemplatePath(NodeProcessor $processor, array $paths): ?string
     {
         foreach ($paths as $path) {
-            $resolved = $processor->resolveTemplatePath($path);
-            if (is_file($resolved)) {
+            $resolved = $processor->resolveTemplateTagPath($path);
+            if ($resolved !== '' && is_file($resolved)) {
                 return $resolved;
             }
         }
@@ -556,7 +561,7 @@ final class CoreTags
             return $resolved;
         }
 
-        return $processor->resolveTemplatePath($paths[0]);
+        return $processor->resolveTemplateTagPath($paths[0]);
     }
 
     /**

@@ -304,7 +304,10 @@ final class NodeProcessor
         }
 
         if ($node->type === 'paired') {
-            return $this->iterateItems($this->resolvePathResult($node->variablePath ?? '', $scope)->value, $node->children);
+            return $this->iterateItems(
+                $this->resolvePathResult($node->variablePath ?? '', $scope)->value,
+                $node->children,
+            );
         }
 
         return '';
@@ -474,7 +477,10 @@ final class NodeProcessor
         }
 
         // Resolve parameter values
-        $params = array_map(fn(AbstractNode $paramNode): mixed => $this->evaluateNodeValue($paramNode, $scope), $node->parameters);
+        $params = array_map(
+            fn(AbstractNode $paramNode): mixed => $this->evaluateNodeValue($paramNode, $scope),
+            $node->parameters,
+        );
 
         $result = $this->handleTagResult($node, $params, $scope);
 
@@ -613,7 +619,8 @@ final class NodeProcessor
                 continue;
             }
 
-            $namedSlots[$slot['name']] = ($namedSlots[$slot['name']] ?? '') . $this->renderFragment($slot['children'], $data);
+            $namedSlots[$slot['name']] = ($namedSlots[$slot['name']] ?? '')
+                . $this->renderFragment($slot['children'], $data);
         }
 
         return [
@@ -659,7 +666,9 @@ final class NodeProcessor
             ];
 
             $this->pushScope($loopVars);
+
             $output .= $this->processNodes($children);
+
             $this->popScope();
         }
 
@@ -732,6 +741,7 @@ final class NodeProcessor
     public function nextSwitchValue(string $name, array $values): mixed
     {
         $index = $this->switches[$name] ?? 0;
+
         $this->switches[$name] = $index + 1;
 
         return $values[$index % count($values)];
@@ -747,26 +757,32 @@ final class NodeProcessor
             return $path;
         }
 
-        $candidates = [];
-
-        if ($this->templatePathStack !== []) {
-            $candidates[] = $this->templatePathStack[count($this->templatePathStack) - 1];
+        $roots    = $this->templateSearchRoots();
+        $resolved = $this->firstExistingTemplatePath($roots, [$path]);
+        if ($resolved !== null) {
+            return $resolved;
         }
 
-        foreach ($this->viewPaths as $viewPath) {
-            $candidates[] = $viewPath;
+        return $this->joinPath($roots[0], $path);
+    }
+
+    public function resolveTemplateTagPath(string $path): string
+    {
+        if ($path === '') {
+            return $path;
         }
 
-        $candidates[] = (string) getcwd();
-
-        foreach ($candidates as $base) {
-            $resolved = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
-            if (is_file($resolved)) {
-                return $resolved;
-            }
+        if ($path[0] === '/' || preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1) {
+            return '';
         }
 
-        return rtrim($candidates[0], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
+        $roots    = $this->templateSearchRoots();
+        $resolved = $this->firstExistingSafeTemplatePath($roots, $path);
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
+        return $this->resolvePathWithinRoot($roots[0], $path) ?? '';
     }
 
     /**
@@ -803,17 +819,13 @@ final class NodeProcessor
             $candidates[] = $name . '.antlers.html';
         }
 
-        foreach ($this->viewPaths as $base) {
-            foreach ($candidates as $candidate) {
-                $resolved = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $candidate;
-                if (is_file($resolved)) {
-                    return $resolved;
-                }
-            }
+        $resolved = $this->firstExistingTemplatePath(array_values($this->viewPaths), $candidates);
+        if ($resolved !== null) {
+            return $resolved;
         }
 
         return $this->viewPaths !== []
-            ? rtrim($this->viewPaths[0], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $candidates[0]
+            ? $this->joinPath($this->viewPaths[0], $candidates[0])
             : $this->resolveTemplatePath($candidates[0]);
     }
 
@@ -1069,5 +1081,136 @@ final class NodeProcessor
         $key = array_key_last($this->tagContextStack);
 
         return $key === null ? null : $this->tagContextStack[$key];
+    }
+
+    /**
+     * @return non-empty-list<string>
+     */
+    private function templateSearchRoots(): array
+    {
+        $roots = [];
+
+        if ($this->templatePathStack !== []) {
+            $roots[] = $this->templatePathStack[count($this->templatePathStack) - 1];
+        }
+
+        foreach ($this->viewPaths as $viewPath) {
+            $roots[] = $viewPath;
+        }
+
+        $roots[] = (string) getcwd();
+
+        return $roots;
+    }
+
+    /**
+     * @param list<string> $roots
+     * @param list<string> $candidates
+     */
+    private function firstExistingTemplatePath(array $roots, array $candidates): ?string
+    {
+        foreach ($roots as $root) {
+            foreach ($candidates as $candidate) {
+                $resolved = $this->joinPath($root, $candidate);
+                if (is_file($resolved)) {
+                    return $resolved;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<string> $roots
+     */
+    private function firstExistingSafeTemplatePath(array $roots, string $path): ?string
+    {
+        foreach ($roots as $root) {
+            $resolved = $this->resolvePathWithinRoot($root, $path);
+            if ($resolved === null) {
+                continue;
+            }
+
+            if (is_file($resolved)) {
+                return $resolved;
+            }
+        }
+
+        return null;
+    }
+
+    private function joinPath(string $root, string $path): string
+    {
+        return rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
+    }
+
+    private function resolvePathWithinRoot(string $root, string $path): ?string
+    {
+        $root = rtrim($root, DIRECTORY_SEPARATOR);
+        if ($root === '') {
+            return null;
+        }
+
+        $rootReal = realpath($root);
+        if ($rootReal === false) {
+            return null;
+        }
+
+        $candidate  = $rootReal . DIRECTORY_SEPARATOR . ltrim($path, DIRECTORY_SEPARATOR);
+        $normalized = $this->normalizePath($candidate);
+        if ($normalized === null) {
+            return null;
+        }
+
+        $rootPrefix = $rootReal . DIRECTORY_SEPARATOR;
+
+        return $normalized === $rootReal || str_starts_with($normalized, $rootPrefix)
+            ? $normalized
+            : null;
+    }
+
+    private function normalizePath(string $path): ?string
+    {
+        $path   = str_replace('\\', '/', $path);
+        $prefix = '';
+
+        if (preg_match('/^[A-Za-z]:/', $path) === 1) {
+            $prefix = substr($path, 0, 2);
+            $path   = substr($path, 2);
+        } elseif (str_starts_with($path, '/')) {
+            $prefix = '';
+        } else {
+            return null;
+        }
+
+        $segments = explode('/', ltrim($path, '/'));
+        $resolved = [];
+
+        foreach ($segments as $segment) {
+            if ($segment === '') {
+                continue;
+            }
+
+            if ($segment === '.') {
+                continue;
+            }
+
+            if ($segment === '..') {
+                if ($resolved === []) {
+                    return null;
+                }
+
+                array_pop($resolved);
+
+                continue;
+            }
+
+            $resolved[] = $segment;
+        }
+
+        $normalized = $prefix . '/' . implode('/', $resolved);
+
+        return str_replace('/', DIRECTORY_SEPARATOR, $normalized);
     }
 }

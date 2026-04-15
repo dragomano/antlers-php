@@ -208,6 +208,14 @@ it('supports svg name alias', function (): void {
     expect(engine()->renderFile(fixturePath('svg/name/template.antlers.html')))->toBe('<svg><circle r="4"/></svg>');
 });
 
+it('blocks partial path traversal outside the current template root', function (): void {
+    expect(rtrim(engine()->renderFile(fixturePath('partial/security/wrapper.antlers.html'))))->toBe('');
+});
+
+it('blocks svg path traversal outside the current template root', function (): void {
+    expect(rtrim(engine()->renderFile(fixturePath('svg/security/template.antlers.html'))))->toBe('');
+});
+
 it('supports increment tag', function (): void {
     $tpl = '{{ increment }},{{ increment }},{{ increment:row from="10" by="5" }},{{ increment:row from="10" by="5" }}';
 
