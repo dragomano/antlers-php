@@ -112,6 +112,7 @@ final class LanguageParser
             'loop',
             'section',
             'yield',
+            'slot',
             'stack',
             'push',
             'prepend',
@@ -128,6 +129,7 @@ final class LanguageParser
         if (str_starts_with($node->name, 'scope:')
             || str_starts_with($node->name, 'section:')
             || str_starts_with($node->name, 'yield:')
+            || str_starts_with($node->name, 'slot:')
             || str_starts_with($node->name, 'stack:')
             || str_starts_with($node->name, 'push:')
             || str_starts_with($node->name, 'prepend:')
@@ -1135,7 +1137,7 @@ final class LanguageParser
         }
 
         // Known built-in tags
-        $knownTags = ['partial', 'cache', 'markdown', 'scope', 'set', 'increment'];
+        $knownTags = ['partial', 'cache', 'markdown', 'scope', 'set', 'increment', 'slot'];
         $firstWord = strtolower((string) preg_replace('/[\s:].*/s', '', $raw));
         if (in_array($firstWord, $knownTags, strict: true)) {
             return false; // handled separately

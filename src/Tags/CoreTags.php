@@ -20,6 +20,7 @@ final class CoreTags
         $registry->register('layout', self::layoutTag(...));
         $registry->register('section', self::sectionTag(...));
         $registry->register('yield', self::yieldTag(...));
+        $registry->register('slot', self::slotTag(...));
         $registry->register('stack', self::stackTag(...));
         $registry->register('push', self::pushTag(...));
         $registry->register('prepend', self::prependTag(...));
@@ -67,12 +68,14 @@ final class CoreTags
     /**
      * @param array<string, mixed> $params
      * @param array<string, mixed> $data
+     * @param AbstractNode[] $children
      */
     private static function partialTag(
         array $params,
         array $data,
         NodeProcessor $processor,
         string $method,
+        array $children = [],
     ): string|bool {
         $paths = self::partialPaths($params, $method);
         if ($paths === []) {
@@ -81,11 +84,12 @@ final class CoreTags
 
         $resolved = self::firstExistingTemplatePath($processor, $paths);
         $exists   = $resolved !== null;
+        $slotData = self::slotData($processor, $data, $children);
 
         return match ($method) {
             'exists'    => $exists,
-            'if_exists' => $exists ? $processor->renderTemplateFile($resolved, self::partialData($params, $data)) : '',
-            default     => $processor->renderTemplateFile(self::fallbackTemplatePath($processor, $paths), self::partialData($params, $data)),
+            'if_exists' => $exists ? $processor->renderTemplateFile($resolved, self::partialData($params, $data, $slotData)) : '',
+            default     => $processor->renderTemplateFile(self::fallbackTemplatePath($processor, $paths), self::partialData($params, $data, $slotData)),
         };
     }
 
@@ -106,12 +110,13 @@ final class CoreTags
             return $processor->renderFragment($children, $data);
         }
 
-        $content = $processor->renderFragment($children, $data);
+        $slotData = self::slotData($processor, $data, $children);
 
         $layoutData = array_merge(
             $data,
             self::layoutData($params),
-            ['template_content' => $content],
+            $slotData,
+            ['template_content' => self::string($slotData['slot'])],
         );
 
         return $processor->renderTemplateFile(self::fallbackTemplatePath($processor, $paths), $layoutData);
@@ -159,6 +164,27 @@ final class CoreTags
         }
 
         $content = $processor->yieldSection($name);
+
+        return $content !== '' ? $content : $processor->renderFragment($children, $data);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $data
+     * @param AbstractNode[] $children
+     */
+    private static function slotTag(
+        array $params,
+        array $data,
+        NodeProcessor $processor,
+        string $method,
+        array $children,
+    ): string {
+        $name = self::sectionName($params, $method);
+
+        $content = $name === null
+            ? self::string($data['slot'] ?? '')
+            : self::slotContent($data, $name);
 
         return $content !== '' ? $content : $processor->renderFragment($children, $data);
     }
@@ -461,13 +487,17 @@ final class CoreTags
     /**
      * @param array<string, mixed> $params
      * @param array<string, mixed> $data
+     * @param array{slot: string, __slots: array<string, string>} $slotData
      * @return array<string, mixed>
      */
-    private static function partialData(array $params, array $data): array
+    private static function partialData(array $params, array $data, array $slotData): array
     {
         unset($params['src'], $params['path'], $params['name']);
 
-        return array_merge($data, $params);
+        /** @var array<string, mixed> $merged */
+        $merged = array_merge($data, $slotData, $params);
+
+        return $merged;
     }
 
     /**
@@ -563,6 +593,37 @@ final class CoreTags
         $processor->storeStack($name, $processor->renderFragment($children, $data), $prepend);
 
         return '';
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param AbstractNode[] $children
+     * @return array{slot: string, __slots: array<string, string>}
+     */
+    private static function slotData(NodeProcessor $processor, array $data, array $children): array
+    {
+        if ($children === []) {
+            return ['slot' => '', '__slots' => []];
+        }
+
+        $slots = $processor->renderSlots($children, $data);
+
+        return [
+            'slot'    => $slots['default'],
+            '__slots' => $slots['named'],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private static function slotContent(array $data, string $name): string
+    {
+        if (! is_array($data['__slots'] ?? null)) {
+            return '';
+        }
+
+        return self::string($data['__slots'][$name] ?? '');
     }
 
     private static function string(mixed $value): string

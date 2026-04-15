@@ -70,6 +70,13 @@ it('supports partial shorthand methods and yield fallback content', function ():
     expect(engine()->renderFile($wrapper))->toBe('<header>Hello</header>|Fallback');
 });
 
+it('supports partial slots and named slots', function (): void {
+    $wrapper = fixturePath('partial/slots/wrapper.antlers.html');
+
+    expect(rtrim(engine()->renderFile($wrapper, ['title' => 'Hello', 'body' => 'Body copy'])))
+        ->toBe('<div class="modal"><div class="modal-header"><h1>Hello</h1></div><div class="modal-content"><p>Body copy</p></div></div>');
+});
+
 it('supports layout rendering with template_content', function (): void {
     $child = fixturePath('layout/basic/child.antlers.html');
 
@@ -81,6 +88,13 @@ it('supports sections inside layouts and passes layout parameters', function ():
 
     expect(rtrim(engine()->renderFile($child, ['title' => 'Welcome', 'body' => 'Body copy'])))
         ->toBe('<h1>Welcome</h1>|<aside>blue</aside>|<p>Body copy</p>');
+});
+
+it('supports layout slots and named slot fallback content', function (): void {
+    $child = fixturePath('layout/slots/child.antlers.html');
+
+    expect(rtrim(engine()->renderFile($child, ['title' => 'Welcome', 'body' => 'Body copy'])))
+        ->toBe('<body><aside><nav>Welcome</nav></aside><main><p>Body copy</p></main><footer>Fallback Footer</footer></body>');
 });
 
 it('keeps partial local parameters scoped to the partial render only', function (): void {
