@@ -70,6 +70,33 @@ it('provides next and previous values in paired array loops', function (): void 
         ->toBe('Brand New Funk(N:Parents Just Don\'t Understand|P:)Parents Just Don\'t Understand(N:Summertime|P:Brand New Funk)Summertime(N:|P:Parents Just Don\'t Understand)');
 });
 
+it('provides next and previous nested fields for array items in paired loops', function (): void {
+    $tpl = '{{ songs }}{{ title }}(N:{{ next:title }}|P:{{ prev:title }}){{ /songs }}';
+    $data = ['songs' => [
+        ['title' => 'Brand New Funk', 'artist' => ['name' => 'DJ Jazzy Jeff & The Fresh Prince']],
+        ['title' => 'Summertime', 'artist' => ['name' => 'DJ Jazzy Jeff & The Fresh Prince']],
+        ['title' => 'Boom! Shake the Room', 'artist' => ['name' => 'DJ Jazzy Jeff & The Fresh Prince']],
+    ]];
+
+    expect(engine()->render($tpl, $data))
+        ->toBe('Brand New Funk(N:Summertime|P:)Summertime(N:Boom! Shake the Room|P:Brand New Funk)Boom! Shake the Room(N:|P:Summertime)');
+});
+
+it('provides next and previous nested fields for object items in paired loops', function (): void {
+    $songA = (object) ['title' => 'Brand New Funk', 'artist' => (object) ['name' => 'DJ Jazzy Jeff & The Fresh Prince']];
+    $songB = (object) ['title' => 'Summertime', 'artist' => (object) ['name' => 'DJ Jazzy Jeff & The Fresh Prince']];
+    $songC = (object) ['title' => 'Boom! Shake the Room', 'artist' => (object) ['name' => 'DJ Jazzy Jeff & The Fresh Prince']];
+
+    $tpl = '{{ songs }}{{ artist:name }}(N:{{ next:artist:name }}|P:{{ prev:artist:name }}){{ /songs }}';
+
+    expect(engine()->render($tpl, ['songs' => [$songA, $songB, $songC]]))
+        ->toBe(
+            'DJ Jazzy Jeff & The Fresh Prince(N:DJ Jazzy Jeff & The Fresh Prince|P:)'
+            . 'DJ Jazzy Jeff & The Fresh Prince(N:DJ Jazzy Jeff & The Fresh Prince|P:DJ Jazzy Jeff & The Fresh Prince)'
+            . 'DJ Jazzy Jeff & The Fresh Prince(N:|P:DJ Jazzy Jeff & The Fresh Prince)',
+        );
+});
+
 it('provides odd and even in foreach', function (): void {
     $tpl  = '{{ foreach items as item }}{{ odd ? "o" : "e" }}{{ /foreach }}';
     $data = ['items' => [1, 2, 3, 4]];
@@ -80,4 +107,13 @@ it('provides index (0-based) in foreach', function (): void {
     $tpl  = '{{ foreach items as item }}{{ index }}{{ /foreach }}';
     $data = ['items' => ['a', 'b', 'c']];
     expect(engine()->render($tpl, $data))->toBe('012');
+});
+
+it('lets loop scope shadow globals without leaking after the loop', function (): void {
+    $e = engine();
+    $e->addGlobal('value', 'Global');
+
+    expect($e->render('{{ foreach items as item }}{{ value }}{{ /foreach }}|{{ value }}', [
+        'items' => ['A', 'B'],
+    ]))->toBe('AB|Global');
 });

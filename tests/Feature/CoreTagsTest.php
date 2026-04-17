@@ -103,6 +103,13 @@ it('keeps partial local parameters scoped to the partial render only', function 
     expect(engine()->renderFile($wrapper, ['title' => 'Outer']))->toBe('Inner|Outer');
 });
 
+it('lets partial local parameters shadow globals without leaking back to the caller scope', function (): void {
+    $e = engine();
+    $e->addGlobal('title', 'Global');
+
+    expect($e->renderFile(fixturePath('partial/scope/wrapper.antlers.html')))->toBe('Inner|Global');
+});
+
 it('does not leak assignments made inside partials back to the caller scope', function (): void {
     $wrapper = fixturePath('partial/assignment/wrapper.antlers.html');
 

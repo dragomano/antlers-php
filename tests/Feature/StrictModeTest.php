@@ -46,6 +46,11 @@ it('throws when modifier is applied to undefined variable in strict mode', funct
         ->toThrow(AntlersRuntimeException::class, 'Undefined variable: "missing"');
 });
 
+it('throws when a modifier argument references an undefined variable in strict mode', function (): void {
+    expect(fn(): string => strictEngine()->render('{{ name | truncate:limit }}', ['name' => 'Alice']))
+        ->toThrow(AntlersRuntimeException::class, 'Undefined variable: "limit"');
+});
+
 // A simple {{ name }} without parameters is treated as a variable lookup.
 // An explicit tag call with parameters (TagNode) triggers the tag registry check.
 it('throws on unknown tag with parameters in strict mode', function (): void {
@@ -59,6 +64,18 @@ it('returns empty string for undefined variable in lenient mode', function (): v
 
 it('returns empty string for unknown tag in lenient mode', function (): void {
     expect(engine()->render('{{ unknownTag }}'))->toBe('');
+});
+
+it('returns empty string for unknown tag with parameters in lenient mode', function (): void {
+    expect(engine()->render('{{ unknownTag param="value" }}'))->toBe('');
+});
+
+it('returns the original value for an unknown modifier in lenient mode', function (): void {
+    expect(engine()->render('{{ name | missing_modifier }}', ['name' => 'Alice']))->toBe('Alice');
+});
+
+it('returns the original value for an unknown modifier in strict mode', function (): void {
+    expect(strictEngine()->render('{{ name | missing_modifier }}', ['name' => 'Alice']))->toBe('Alice');
 });
 
 it('can disable strict mode after enabling it', function (): void {

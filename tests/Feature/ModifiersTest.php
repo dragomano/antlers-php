@@ -380,9 +380,45 @@ it('chains multiple modifiers', function (): void {
         ->toBe('HEL...');
 });
 
+it('chains modifiers left to right through unknown modifiers in lenient mode', function (): void {
+    expect(engine()->render('{{ name | upper | missing_modifier | lower }}', ['name' => 'Hello']))
+        ->toBe('hello');
+});
+
 it('supports modifier arguments in parenthesis form', function (): void {
     expect(engine()->render('{{ name | truncate(3, "!") }}', ['name' => 'hello']))
         ->toBe('hel!');
+});
+
+it('supports variables as modifier arguments', function (): void {
+    expect(engine()->render('{{ name | truncate:limit:suffix }}', [
+        'name'   => 'hello',
+        'limit'  => 3,
+        'suffix' => '!',
+    ]))->toBe('hel!');
+});
+
+it('supports expressions as modifier arguments', function (): void {
+    expect(engine()->render('{{ name | truncate:(limit + 1):suffix }}', [
+        'name'   => 'hello',
+        'limit'  => 2,
+        'suffix' => '!',
+    ]))->toBe('hel!');
+});
+
+it('passes the current scope to custom modifiers', function (): void {
+    $e = engine();
+    $e->addModifier('scope_value', fn($v, $p, $context): string => (string) ($context[(string) ($p[0] ?? '')] ?? ''));
+
+    expect($e->render('{{ text | scope_value:"suffix_key" }}', [
+        'text'       => 'ignored',
+        'suffix_key' => 'resolved from scope',
+    ]))->toBe('resolved from scope');
+});
+
+it('returns the original value when regex_replace receives an empty pattern', function (): void {
+    expect(engine()->render('{{ text | regex_replace:"" :"#" }}', ['text' => 'Item 123']))
+        ->toBe('Item 123');
 });
 
 it('allows registering custom modifier', function (): void {

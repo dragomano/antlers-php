@@ -91,6 +91,13 @@ it('merges global and local data with local taking precedence', function (): voi
     expect($e->render('{{ greeting }}, {{ name }}!', ['name' => 'World']))->toBe('Hello, World!');
 });
 
+it('lets local assignments shadow globals within the current render', function (): void {
+    $e = engine();
+    $e->addGlobal('name', 'Global');
+
+    expect($e->render('{{ name = "Local" }}{{ name }}'))->toBe('Local');
+});
+
 it('assigns values with expression syntax without rendering them directly', function (): void {
     expect(engine()->render('{{ items = songs }}{{ items[1] }}', [
         'songs' => ['a', 'b', 'c'],
