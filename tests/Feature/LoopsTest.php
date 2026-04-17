@@ -56,6 +56,16 @@ it('handles paired variable tag iterating array', function (): void {
     expect(engine()->render($tpl, $data))->toBe('a|b|');
 });
 
+it('iterates Traversable collections like arrays in paired loops', function (): void {
+    $tpl  = '{{ items }}{{ title }}|{{ /items }}';
+    $data = ['items' => new ArrayIterator([
+        ['title' => 'A'],
+        ['title' => 'B'],
+    ])];
+
+    expect(engine()->render($tpl, $data))->toBe('A|B|');
+});
+
 it('supports colon notation for variables', function (): void {
     $tpl  = '{{ user:profile:name }}';
     $data = ['user' => ['profile' => ['name' => 'Alice']]];
@@ -95,6 +105,26 @@ it('provides next and previous nested fields for object items in paired loops', 
             . 'DJ Jazzy Jeff & The Fresh Prince(N:DJ Jazzy Jeff & The Fresh Prince|P:DJ Jazzy Jeff & The Fresh Prince)'
             . 'DJ Jazzy Jeff & The Fresh Prince(N:|P:DJ Jazzy Jeff & The Fresh Prince)',
         );
+});
+
+it('treats ArrayAccess items like arrays for loop scope and next/prev lookups', function (): void {
+    $tpl = '{{ songs }}{{ title }}(N:{{ next:title }}|P:{{ prev:title }}){{ /songs }}';
+    $data = ['songs' => [
+        new ArrayObject(['title' => 'Brand New Funk']),
+        new ArrayObject(['title' => 'Summertime']),
+        new ArrayObject(['title' => 'Boom! Shake the Room']),
+    ]];
+
+    expect(engine()->render($tpl, $data))
+        ->toBe('Brand New Funk(N:Summertime|P:)Summertime(N:Boom! Shake the Room|P:Brand New Funk)Boom! Shake the Room(N:|P:Summertime)');
+});
+
+it('renders paired object values with the same local field access as associative arrays', function (): void {
+    $song        = new stdClass();
+    $song->title = 'Summertime';
+
+    expect(engine()->render('{{ song }}{{ title }}{{ /song }}', ['song' => $song]))
+        ->toBe('Summertime');
 });
 
 it('provides odd and even in foreach', function (): void {

@@ -385,7 +385,7 @@ final class NodeProcessor
             return '';
         }
 
-        $itemArray  = is_array($items) ? $items : iterator_to_array($items);
+        $itemArray  = $this->iterableToArray($items) ?? [];
         $itemValues = array_values($itemArray);
         $total      = count($itemArray);
         $output     = '';
@@ -415,11 +415,9 @@ final class NodeProcessor
                 'next'  => $this->normalizeRelativeLoopItem($index < $total ? ($itemValues[$index] ?? null) : null),
             ];
 
-            // Merge item data into scope
-            if (is_array($item)) {
-                $loopVars = array_merge($loopVars, $this->normalizeScopeFrame($item));
-            } elseif (is_object($item)) {
-                $loopVars = array_merge($loopVars, $this->normalizeScopeFrame((array) $item));
+            $itemScope = $this->extractItemScope($item);
+            if ($itemScope !== null) {
+                $loopVars = array_merge($loopVars, $itemScope);
             } else {
                 $loopVars = $this->withLoopValue($loopVars, 'value', $item);
             }
@@ -452,12 +450,9 @@ final class NodeProcessor
             return null;
         }
 
-        if (is_array($item)) {
-            return $item;
-        }
-
-        if (is_object($item)) {
-            return (array) $item;
+        $itemScope = $this->extractItemScope($item);
+        if ($itemScope !== null) {
+            return $itemScope;
         }
 
         return ['value' => $item];
@@ -515,18 +510,26 @@ final class NodeProcessor
      */
     private function processPairedValue(mixed $value, array $children): string
     {
-        if ($value instanceof Traversable) {
-            return $this->iterateItems($value, $children);
-        }
-
-        if (is_array($value) && $value !== []) {
+        $items = $this->iterableToArray($value);
+        if ($items !== null && $items !== []) {
             // Check if it's a list (numeric keys) or associative array
-            if (array_is_list($value)) {
-                return $this->iterateItems($value, $children);
+            if (array_is_list($items)) {
+                return $this->iterateItems($items, $children);
             }
 
             // Single associative item — render with merged scope
-            $this->pushScope($this->normalizeScopeFrame($value));
+            $this->pushScope($this->normalizeScopeFrame($items));
+
+            $output = $this->processNodes($children);
+
+            $this->popScope();
+
+            return $output;
+        }
+
+        $itemScope = $this->extractItemScope($value);
+        if ($itemScope !== null && $itemScope !== []) {
+            $this->pushScope($itemScope);
 
             $output = $this->processNodes($children);
 
@@ -889,6 +892,39 @@ final class NodeProcessor
         return $normalized;
     }
 
+    /**
+     * @return array<array-key, mixed>|null
+     */
+    private function iterableToArray(mixed $value): ?array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if ($value instanceof Traversable) {
+            return iterator_to_array($value);
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function extractItemScope(mixed $item): ?array
+    {
+        $iterable = $this->iterableToArray($item);
+        if ($iterable !== null) {
+            return $this->normalizeScopeFrame($iterable);
+        }
+
+        if (is_object($item)) {
+            return $this->normalizeScopeFrame(get_object_vars($item));
+        }
+
+        return null;
+    }
+
     private function toInt(mixed $value): int
     {
         if (is_int($value)) {
@@ -1173,7 +1209,6 @@ final class NodeProcessor
     private function normalizePath(string $path): ?string
     {
         $path   = str_replace('\\', '/', $path);
-        $prefix = '';
 
         if (preg_match('/^[A-Za-z]:/', $path) === 1) {
             $prefix = substr($path, 0, 2);

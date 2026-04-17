@@ -32,6 +32,13 @@ describe('PathDataManager', function (): void {
         expect($this->pathDataManager->get('person.name', ['person' => $obj]))->toBe('Charlie');
     });
 
+    it('accesses ArrayAccess offsets like array keys', function (): void {
+        $person = new ArrayObject(['name' => 'Dana']);
+
+        expect($this->pathDataManager->get('person.name', ['person' => $person]))->toBe('Dana')
+            ->and($this->pathDataManager->has('person.name', ['person' => $person]))->toBeTrue();
+    });
+
     it('accesses numeric array index', function (): void {
         $data = ['items' => ['a', 'b', 'c']];
         expect($this->pathDataManager->get('items[1]', $data))->toBe('b');

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Modifiers;
 
+use ArrayAccess;
 use Bugo\Antlers\Runtime\ValueResult;
 use Bugo\Antlers\Support\MarkdownRenderer;
 use Symfony\Component\String\Slugger\AsciiSlugger;
@@ -32,24 +33,27 @@ final class CoreModifiers
             => trim(self::string($v), self::string($p[0] ?? " \t\n\r\0\x0B")));
 
         $registry->register('reverse', static function (mixed $v): array|string {
-            if (is_array($v)) {
-                return array_reverse($v);
+            $items = self::iterableToArray($v);
+            if ($items !== null) {
+                return array_reverse($items);
             }
 
             return self::unicode($v)->reverse()->toString();
         });
 
         $registry->register('length', static function (mixed $v): int {
-            if (is_array($v)) {
-                return count($v);
+            $items = self::iterableToArray($v);
+            if ($items !== null) {
+                return count($items);
             }
 
             return self::unicode($v)->length();
         });
 
         $registry->register('count', static function (mixed $v): int {
-            if (is_array($v)) {
-                return count($v);
+            $items = self::iterableToArray($v);
+            if ($items !== null) {
+                return count($items);
             }
 
             if (is_string($v)) {
@@ -91,8 +95,9 @@ final class CoreModifiers
         $registry->register('limit', static function (mixed $v, array $p): array|string {
             $limit = self::int($p[0] ?? 100);
 
-            if (is_array($v)) {
-                return array_slice($v, 0, $limit);
+            $items = self::iterableToArray($v);
+            if ($items !== null) {
+                return array_slice($items, 0, $limit);
             }
 
             return self::unicode($v)->slice(0, $limit)->toString();
@@ -165,41 +170,45 @@ final class CoreModifiers
             => round(self::float($v), self::int($p[0] ?? 0)));
 
         $registry->register('sort', static function (mixed $v, array $p): mixed {
-            if (! is_array($v)) {
+            $items = self::iterableToArray($v);
+            if ($items === null) {
                 return $v;
             }
 
             $key = isset($p[0]) ? self::string($p[0]) : null;
             if ($key !== null) {
-                usort($v, static fn(mixed $a, mixed $b): int => (is_array($a) ? ($a[$key] ?? null) : null)
-                    <=> (is_array($b) ? ($b[$key] ?? null) : null));
+                usort($items, static fn(mixed $a, mixed $b): int => self::dataGet($a, $key)
+                    <=> self::dataGet($b, $key));
 
-                return $v;
+                return $items;
             }
 
-            sort($v);
+            sort($items);
 
-            return $v;
+            return $items;
         });
 
         $registry->register('first', static function (mixed $v, array $p): mixed {
-            if (is_array($v)) {
-                $n = self::int($p[0] ?? 1);
+            $items = self::iterableToArray($v);
+            if ($items !== null) {
+                $n     = self::int($p[0] ?? 1);
+                $slice = array_slice($items, 0, $n);
 
-                return $n === 1 ? ($v[0] ?? null) : array_slice($v, 0, $n);
+                return $n === 1 ? self::firstValue($slice) : $slice;
             }
 
             return $v;
         });
 
         $registry->register('last', static function (mixed $v, array $p): mixed {
-            if (is_array($v)) {
+            $items = self::iterableToArray($v);
+            if ($items !== null) {
                 $n = self::int($p[0] ?? 1);
                 if ($n === 1) {
-                    return self::lastValue($v);
+                    return self::lastValue($items);
                 }
 
-                return array_slice($v, -$n);
+                return array_slice($items, -$n);
             }
 
             return $v;
@@ -220,27 +229,24 @@ final class CoreModifiers
         });
 
         $registry->register('unique', static function (mixed $v): mixed {
-            if (! is_array($v)) {
+            $items = self::iterableToArray($v);
+            if ($items === null) {
                 return $v;
             }
 
-            return self::uniqueValues($v);
+            return self::uniqueValues($items);
         });
 
         $registry->register('flatten', static function (mixed $v): array {
             $result = [];
-
-            $arr = (array) $v;
-            array_walk_recursive($arr, static function (mixed $item) use (&$result): void {
-                $result = array_merge($result, [$item]);
-            });
+            self::flattenInto($v, $result);
 
             return $result;
         });
 
-        $registry->register('keys', static fn(mixed $v): array => is_array($v) ? array_keys($v) : []);
+        $registry->register('keys', static fn(mixed $v): array => array_keys(self::iterableToArray($v) ?? []));
 
-        $registry->register('values', static fn(mixed $v): array => is_array($v) ? array_values($v) : []);
+        $registry->register('values', static fn(mixed $v): array => array_values(self::iterableToArray($v) ?? []));
 
         $registry->register('where', static function (mixed $v, array $p): mixed {
             $items = self::iterableToArray($v);
@@ -258,22 +264,24 @@ final class CoreModifiers
         });
 
         $registry->register('chunk', static function (mixed $v, array $p): mixed {
-            if (! is_array($v)) {
+            $items = self::iterableToArray($v);
+            if ($items === null) {
                 return $v;
             }
 
             $size = max(1, self::int($p[0] ?? 2));
 
-            return array_chunk($v, $size);
+            return array_chunk($items, $size);
         });
 
         $registry->register('join', static function (mixed $v, array $p): string {
-            if (! is_array($v)) {
+            $items = self::iterableToArray($v);
+            if ($items === null) {
                 return self::string($v);
             }
 
             $glue  = self::string($p[0] ?? ', ');
-            $parts = array_map(self::string(...), $v);
+            $parts = array_map(self::string(...), $items);
 
             return implode($glue, $parts);
         });
@@ -444,6 +452,16 @@ final class CoreModifiers
     }
 
     /**
+     * @param array<array-key, mixed> $values
+     */
+    private static function firstValue(array $values): mixed
+    {
+        $slice = array_slice($values, 0, 1);
+
+        return $slice === [] ? null : $slice[0];
+    }
+
+    /**
      * @param array<array-key, mixed> $params
      */
     private static function parameterKey(array $params): int|string
@@ -502,6 +520,23 @@ final class CoreModifiers
         return null;
     }
 
+    /**
+     * @param list<mixed> $result
+     */
+    private static function flattenInto(mixed $value, array &$result): void
+    {
+        $items = self::iterableToArray($value);
+        if ($items === null) {
+            $result = array_merge($result, [$value]);
+
+            return;
+        }
+
+        foreach ($items as $item) {
+            self::flattenInto($item, $result);
+        }
+    }
+
     private static function dataGet(mixed $value, int|string $key): mixed
     {
         if (is_array($value)) {
@@ -517,6 +552,14 @@ final class CoreModifiers
 
             if (method_exists($value, $property)) {
                 return $value->{$property}();
+            }
+
+            if (method_exists($value, '__get')) {
+                return $value->{$property};
+            }
+
+            if ($value instanceof ArrayAccess && $value->offsetExists($key)) {
+                return $value[$key];
             }
         }
 

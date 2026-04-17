@@ -320,6 +320,44 @@ it('applies join modifier', function (): void {
         ->toBe('a / b / c');
 });
 
+it('applies collection modifiers to Traversable values like arrays', function (): void {
+    $items = new ArrayIterator([
+        'name' => 'Alice',
+        'role' => 'admin',
+    ]);
+
+    expect(engineWithJson()->render('{{ items | keys | to_json }}', ['items' => $items]))
+        ->toBe('["name","role"]')
+        ->and(engineWithJson()->render('{{ items | values | to_json }}', ['items' => new ArrayIterator([
+            'name' => 'Alice',
+            'role' => 'admin',
+        ])]))
+        ->toBe('["Alice","admin"]')
+        ->and(engine()->render('{{ items | join:" / " }}', ['items' => new ArrayIterator(['a', 'b', 'c'])]))
+        ->toBe('a / b / c')
+        ->and(engineWithJson()->render('{{ items | reverse | to_json }}', ['items' => new ArrayIterator([1, 2, 3])]))
+        ->toBe('[3,2,1]');
+});
+
+it('applies keyed collection modifiers to ArrayAccess items like arrays and objects', function (): void {
+    $items = new ArrayIterator([
+        new ArrayObject(['name' => 'Charlie', 'active' => false]),
+        new ArrayObject(['name' => 'Alice', 'active' => true]),
+        new ArrayObject(['name' => 'Bob', 'active' => true]),
+    ]);
+
+    expect(engineWithJson()->render('{{ items | sort:"name" | pluck:"name" | to_json }}', ['items' => $items]))
+        ->toBe('["Alice","Bob","Charlie"]')
+        ->and(engineWithJson()->render('{{ items | where:"active":true | pluck:"name" | to_json }}', [
+            'items' => new ArrayIterator([
+                new ArrayObject(['name' => 'Charlie', 'active' => false]),
+                new ArrayObject(['name' => 'Alice', 'active' => true]),
+                new ArrayObject(['name' => 'Bob', 'active' => true]),
+            ]),
+        ]))
+        ->toBe('["Alice","Bob"]');
+});
+
 it('applies explode modifier', function (): void {
     expect(engineWithJson()->render('{{ text | explode:"-" | to_json }}', ['text' => 'a-b-c']))
         ->toBe('["a","b","c"]');
