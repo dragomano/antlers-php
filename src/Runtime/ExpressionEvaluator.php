@@ -28,19 +28,13 @@ use Traversable;
 /**
  * Evaluates expression AST nodes against a data scope.
  */
-final class ExpressionEvaluator
+final readonly class ExpressionEvaluator
 {
-    private bool $strict = false;
-
     public function __construct(
-        private readonly PathDataManager $paths,
-        private readonly ModifierRunner $modifiers,
+        private PathDataManager $paths,
+        private ModifierRunner $modifiers,
+        private RuntimeOptions $options,
     ) {}
-
-    public function setStrict(bool $strict): void
-    {
-        $this->strict = $strict;
-    }
 
     /**
      * @param array<string, mixed> $scope
@@ -89,7 +83,15 @@ final class ExpressionEvaluator
      */
     private function resolveVariable(string $path, array $scope): mixed
     {
-        if ($this->strict && ! $this->paths->has($path, $scope)) {
+        if ($this->options->guardPolicy->guardsVariable($path)) {
+            if ($this->options->strict) {
+                throw new AntlersRuntimeException("Guarded variable: \"$path\"");
+            }
+
+            return null;
+        }
+
+        if ($this->options->strict && ! $this->paths->has($path, $scope)) {
             throw new AntlersRuntimeException("Undefined variable: \"$path\"");
         }
 
@@ -217,13 +219,13 @@ final class ExpressionEvaluator
     private function evalNullCoalesce(NullCoalesceNode $node, array $scope, ?callable $assignmentWriter = null): mixed
     {
         // Temporarily disable strict for the left-hand side — ?? is an explicit safe-access
-        $prev = $this->strict;
+        $prev = $this->options->strict;
 
-        $this->strict = false;
+        $this->options->strict = false;
 
         $left = $this->evaluateResult($node->left, $scope, $assignmentWriter);
 
-        $this->strict = $prev;
+        $this->options->strict = $prev;
 
         return $left->value ?? $this->evaluate($node->right, $scope, $assignmentWriter);
     }

@@ -532,9 +532,9 @@ final class CoreModifiers
             return;
         }
 
-        foreach ($items as $item) {
+        array_walk($items, static function (mixed $item) use (&$result): void {
             self::flattenInto($item, $result);
-        }
+        });
     }
 
     private static function dataGet(mixed $value, int|string $key): mixed

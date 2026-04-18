@@ -14,6 +14,7 @@ use Bugo\Antlers\Runtime\ExpressionEvaluator;
 use Bugo\Antlers\Runtime\ModifierRunner;
 use Bugo\Antlers\Runtime\NodeProcessor;
 use Bugo\Antlers\Runtime\PathDataManager;
+use Bugo\Antlers\Runtime\RuntimeOptions;
 use Bugo\Antlers\Tags\CoreTags;
 use Bugo\Antlers\Tags\TagInterface;
 use Bugo\Antlers\Tags\TagRegistry;
@@ -29,6 +30,8 @@ final class Engine
 {
     private readonly NodeProcessor $processor;
 
+    private readonly RuntimeOptions $runtimeOptions;
+
     /** @var array<string, mixed> */
     private array $globalData = [];
 
@@ -42,10 +45,12 @@ final class Engine
         CoreModifiers::register($this->modifierRegistry);
         CoreTags::register($this->tagRegistry);
 
+        $this->runtimeOptions = new RuntimeOptions();
+
         // Build the runtime pipeline
         $paths      = new PathDataManager();
-        $runner     = new ModifierRunner($this->modifierRegistry);
-        $evaluator  = new ExpressionEvaluator($paths, $runner);
+        $runner     = new ModifierRunner($this->modifierRegistry, $this->runtimeOptions);
+        $evaluator  = new ExpressionEvaluator($paths, $runner, $this->runtimeOptions);
         $conditions = new ConditionProcessor($evaluator);
 
         $this->processor = new NodeProcessor(
@@ -55,6 +60,7 @@ final class Engine
             $this->tagRegistry,
             $paths,
             $this->languageParser,
+            $this->runtimeOptions,
         );
     }
 
@@ -162,7 +168,14 @@ final class Engine
      */
     public function setStrictMode(bool $strict): self
     {
-        $this->processor->setStrict($strict);
+        $this->runtimeOptions->strict = $strict;
+
+        return $this;
+    }
+
+    public function setGuardPolicy(GuardPolicy $policy): self
+    {
+        $this->runtimeOptions->guardPolicy = $policy;
 
         return $this;
     }

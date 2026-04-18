@@ -32,8 +32,6 @@ final class NodeProcessor
     /** @var array<string, mixed> */
     private array $globalData = [];
 
-    private bool $strict = false;
-
     /** @var array<int, array<string, mixed>> Scope stack; each entry is a data frame */
     private array $scopeStack = [];
 
@@ -68,6 +66,7 @@ final class NodeProcessor
         private readonly TagRegistry $tags,
         private readonly PathDataManager $paths,
         private readonly LanguageParser $parser,
+        private readonly RuntimeOptions $options,
     ) {}
 
     /**
@@ -76,13 +75,6 @@ final class NodeProcessor
     public function setGlobalData(array $data): void
     {
         $this->globalData = $data;
-    }
-
-    public function setStrict(bool $strict): void
-    {
-        $this->strict = $strict;
-
-        $this->evaluator->setStrict($strict);
     }
 
     /**
@@ -262,7 +254,7 @@ final class NodeProcessor
         // or a tag method (tag:method). Prefer the variable when it exists in scope.
         $isColonPath = preg_match('/^\w+(?::\w+|\.\w+|\[[^]]+])*$/', $raw) === 1;
         if ($isColonPath && $this->paths->has($raw, $scope)) {
-            return $this->evaluator->stringify($this->paths->get($raw, $scope));
+            return $this->evaluator->stringify($this->resolvePathValue($raw, $scope));
         }
 
         // Parse the node into a typed AST node and process it
@@ -416,11 +408,7 @@ final class NodeProcessor
             ];
 
             $itemScope = $this->extractItemScope($item);
-            if ($itemScope !== null) {
-                $loopVars = array_merge($loopVars, $itemScope);
-            } else {
-                $loopVars = $this->withLoopValue($loopVars, 'value', $item);
-            }
+            $loopVars = $itemScope !== null ? array_merge($loopVars, $itemScope) : $this->withLoopValue($loopVars, 'value', $item);
 
             // Named alias
             if ($alias !== null) {
@@ -464,8 +452,16 @@ final class NodeProcessor
     private function processTag(TagNode $node, array $scope): string
     {
         if (! $this->tags->has($node->name)) {
-            if ($this->strict) {
+            if ($this->options->strict) {
                 throw new AntlersRuntimeException("Unknown tag: \"$node->name\"");
+            }
+
+            return '';
+        }
+
+        if ($this->options->guardPolicy->guardsTag($node->name)) {
+            if ($this->options->strict) {
+                throw new AntlersRuntimeException("Guarded tag: \"$node->name\"");
             }
 
             return '';
@@ -793,7 +789,15 @@ final class NodeProcessor
      */
     public function resolvePathValue(string $path, array $scope): mixed
     {
-        if ($this->strict && ! $this->paths->has($path, $scope)) {
+        if ($this->options->guardPolicy->guardsVariable($path)) {
+            if ($this->options->strict) {
+                throw new AntlersRuntimeException("Guarded variable: \"$path\"");
+            }
+
+            return null;
+        }
+
+        if ($this->options->strict && ! $this->paths->has($path, $scope)) {
             throw new AntlersRuntimeException("Undefined variable: \"$path\"");
         }
 
@@ -988,7 +992,7 @@ final class NodeProcessor
      */
     private function resolvePathResult(string $path, array $scope): ValueResult
     {
-        return new ValueResult($this->paths->get($path, $scope));
+        return new ValueResult($this->resolvePathValue($path, $scope));
     }
 
     /**
