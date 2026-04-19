@@ -6,6 +6,16 @@
 
 [English](README.md)
 
+## Позиционирование
+
+`antlers-php` нацелен на автономное подмножество Antlers для обычных PHP-проектов.
+
+Это значит, что проект стремится поддерживать базовое ядро языка Antlers, которое предсказуемо работает без Statamic и Laravel: переменные, выражения, условия, циклы, модификаторы, partials и пользовательские расширения через теги и модификаторы.
+
+Проект не обещает полную совместимость со всеми тегами Statamic, всеми модификаторами, CMS-возможностями или Laravel-зависимыми интеграциями.
+
+В частности, PHP-делимитеры `{{? ?}}` и `{{$ $}}` из Statamic Antlers намеренно не поддерживаются в `antlers-php`. Этот проект сознательно не включает выполнение PHP в standalone-ядро шаблонизатора.
+
 ## Установка
 
 ```bash
@@ -22,6 +32,19 @@ $engine = new Engine();
 echo $engine->render('Привет, {{ name }}!', ['name' => 'мир']);
 // → Привет, мир!
 ```
+
+## Безопасность
+
+`antlers-php` по умолчанию не применяет автоэкранирование к выводу `{{ ... }}`. Это сделано намеренно для совместимости с автономным Antlers.
+
+Когда в HTML попадает пользовательский ввод, экранируйте его явно через `sanitize` или `entities`:
+
+```antlers
+{{ comment | sanitize }}
+{{ email | entities }}
+```
+
+Считайте обычный вывод `{{ ... }}` сырым выводом шаблона, если вы не применили экранирование самостоятельно.
 
 ## Синтаксис
 
@@ -80,6 +103,19 @@ echo $engine->render('Привет, {{ name }}!', ['name' => 'мир']);
     {{ key }}: {{ value }}
 {{ /foreach }}
 
+{{# statamic-совместимые формы foreach #}}
+{{ foreach:company_info }}
+    {{ key }}: {{ value }}
+{{ /foreach:company_info }}
+
+{{ foreach:song_reviews as="song|rating" }}
+    {{ song }}: {{ rating }}
+{{ /foreach:song_reviews }}
+
+{{ foreach :array="reviews:songs" as="song|rating" }}
+    {{ song }}: {{ rating }}
+{{ /foreach }}
+
 {{# числовой цикл #}}
 {{ for 1 to 5 }}
     {{ value }}
@@ -135,6 +171,8 @@ echo $engine->render('Привет, {{ name }}!', ['name' => 'мир']);
 {{# Этот текст не попадёт в HTML #}}
 ```
 
+`{{? ?}}` и `{{$ $}}` в этом движке недоступны. Если нужен PHP, размещайте его в коде приложения, а не внутри Antlers-шаблонов.
+
 ### Noparse
 
 ```antlers
@@ -152,22 +190,69 @@ echo $engine->render('Привет, {{ name }}!', ['name' => 'мир']);
 {{ greeting name="Алиса" }}
 
 {{# тег с методом (пространство имён) #}}
-{{ partial:load src="header" }}
+{{ partial:header title="Добро пожаловать" }}
 
 {{# парный тег (с содержимым) #}}
-{{ wrap tag="section" }}
-    Содержимое
-{{ /wrap }}
+{{ markdown }}
+**Жирный**
+{{ /markdown }}
+```
+
+## Встроенные теги
+
+В standalone-ядре сейчас зарегистрированы такие встроенные теги:
+
+`dump`, `foreach`, `increment`, `layout`, `loop`, `markdown`, `once`, `partial`, `prepend`, `push`, `scope`, `section`, `slot`, `stack`, `svg`, `switch`, `yield`
+
+`set` тоже поддерживается, но это синтаксис Antlers для присваивания переменных, а не зарегистрированный тег из `CoreTags`.
+
+### Примеры встроенных тегов
+
+```antlers
+{{ partial src="partials/card.antlers.html" title="Привет" }}
+{{ partial:header title="Добро пожаловать" }}
+{{ partial:exists src="partials/card.antlers.html" }}
+{{ partial:if_exists src="partials/maybe.antlers.html" }}
+
+{{ section:hero }}<h1>{{ title }}</h1>{{ /section:hero }}
+{{ yield:hero }}
+{{ yield:sidebar }}Запасной сайдбар{{ /yield:sidebar }}
+
+{{ markdown }}**Жирный**{{ /markdown }}
+{{ markdown:indent }}
+    # Заголовок
+{{ /markdown:indent }}
+
+{{ loop times="3" }}{{ value }}{{ /loop }}
+{{ loop count="3" start="5" }}{{ value }}{{ /loop }}
+{{ loop:2 }}{{ value }}{{ /loop:2 }}
+
+{{ switch between="odd|even" }}
+{{ switch name="rows" in="a|b" }}
+
+{{ scope:page }}{{ page:title }}{{ /scope:page }}
+{{ dump value=user }}
+{{ svg src="icons/logo.svg" }}
+{{ increment }}
+{{ increment:row from="10" by="5" }}
 ```
 
 ## Встроенные модификаторы
 
-Этот проект намеренно поддерживает только официальный поднабор модификаторов Statamic, который хорошо работает в автономном PHP-движке без зависимостей от Laravel/Statamic runtime.
+Этот проект намеренно поддерживает только официальный поднабор модификаторов Statamic, который хорошо работает в автономном PHP-движке без зависимостей от среды выполнения Laravel/Statamic.
 
 | Статус | Модификаторы |
 |--------|--------------|
 | Поддерживаемый официальный поднабор | `add`, `ceil`, `chunk`, `contains`, `count`, `decode`, `divide`, `ends_with`, `entities`, `explode`, `first`, `flatten`, `floor`, `format`, `is_array`, `is_empty`, `is_numeric`, `join`, `kebab`, `keys`, `last`, `lcfirst`, `length`, `limit`, `lower`, `markdown`, `md5`, `mod`, `multiply`, `nl2br`, `pad`, `pluck`, `regex_replace`, `repeat`, `replace`, `reverse`, `round`, `sanitize`, `slugify`, `snake`, `sort`, `starts_with`, `strip_tags`, `studly`, `subtract`, `surround`, `title`, `trim`, `truncate`, `ucfirst`, `unique`, `upper`, `values`, `where`, `word_count`, `wrap` |
 | Пока не включены | `add_slashes`, `ampersand_list`, `antlers`, `as`, `ascii`, `at`, `attribute`, `background_position`, `bard_html`, `bard_items`, `bard_text`, `bool_string`, `camelize`, `cdata`, `classes`, `collapse`, `collapse_whitespace`, `compact`, `console_log`, `contains_all`, `contains_any`, `count_substring`, `dashify`, `days_ago`, `deslugify`, `dl`, `dump`, `embed_url`, `ensure_left`, `ensure_right`, `excerpt`, `favicon`, `filter_empty`, `flip`, `format_number`, `format_translated`, `full_urls`, `get`, `gravatar`, `group_by`, `has_lower_case`, `has_upper_case`, `headline`, `hex_to_rgb`, `hours_ago`, `image`, `in_array`, `insert`, `is_after`, `is_alpha`, `is_alphanumeric`, `is_before`, `is_between`, `is_blank`, `is_email`, `is_embeddable`, `is_external_url`, `is_future`, `is_json`, `is_leap_year`, `is_lowercase`, `is_numberwang`, `is_past`, `is_today`, `is_tomorrow`, `is_uppercase`, `is_url`, `is_weekday`, `is_weekend`, `is_yesterday`, `iso_format`, `link`, `list`, `macro`, `mailto`, `mark`, `minutes_ago`, `modify_date`, `months_ago`, `obfuscate`, `obfuscate_email`, `offset`, `ol`, `option_list`, `output`, `parse_url`, `partial`, `pathinfo`, `piped`, `plural`, `random`, `raw`, `rawurlencode`, `rawurlencode_except_slashes`, `ray`, `read_time`, `regex_mark`, `relative`, `remove_left`, `remove_right`, `safe_truncate`, `seconds_ago`, `segment`, `select`, `sentence_list`, `shuffle`, `singular`, `smartypants`, `spaceless`, `str_pad_left`, `substr`, `sum`, `swap_case`, `table`, `tidy`, `timezone`, `to_json`, `to_qs`, `to_spaces`, `to_tabs`, `ul`, `underscored`, `url`, `urlencode`, `urlencode_except_slashes`, `where-in`, `weeks_ago`, `widont`, `years_ago` |
+
+### Спорные модификаторы Statamic
+
+`antlers`, `partial` и `raw` намеренно не входят в автономный API модификаторов.
+
+- `partial` в этом проекте остается задачей тегов: вместо модификатора используются `partial`, `partial:exists` и `partial:if_exists`.
+- `antlers` не входит в первое стабильное автономное ядро, потому что повторный рендер строк как шаблонов требует отдельной модели выполнения и явной защиты от рекурсии.
+- `raw` не включается, потому что `antlers-php` по умолчанию не делает автоэкранирование; literal/raw-семантика уже покрывается обычным выводом, `@{{ ... }}` и `noparse`.
 
 <details>
 <summary><strong>Строковые</strong></summary>
@@ -199,7 +284,7 @@ echo $engine->render('Привет, {{ name }}!', ['name' => 'мир']);
 | `repeat` | Повторить строку | `{{ text \| repeat:3 }}` |
 | `starts_with` | Начинается с | `{{ text \| starts_with:"Привет" }}` |
 | `ends_with` | Заканчивается на | `{{ text \| ends_with:"!" }}` |
-| `contains` | Содержит подстроку | `{{ text \| contains:"word" }}` |
+| `contains` | Содержит подстроку | `{{ text \| contains:"слово" }}` |
 | `length` | Длина строки | `{{ text \| length }}` |
 </details>
 
@@ -244,6 +329,15 @@ echo $engine->render('Привет, {{ name }}!', ['name' => 'мир']);
 | Модификатор | Описание | Пример |
 |-------------|----------|--------|
 | `format` | Форматировать дату | `{{ date \| format:"d.m.Y" }}` |
+
+Текущая стратегия автономной версии:
+
+- Встроенные возможности даты и времени намеренно минимальны и сейчас ограничены только `format`.
+- `format` принимает Unix timestamp и строки, которые PHP умеет разобрать через `strtotime()`.
+- Если значение не удается распознать как дату/время, возвращается исходная строка без изменений.
+- Carbon намеренно не входит в зависимости проекта.
+- Carbon-подобные или локале-зависимые модификаторы вроде `iso_format`, `modify_date`, `days_ago`, `is_today` и `timezone` не входят в первое стабильное автономное ядро.
+- Если позже появится более богатая поддержка даты и времени, она должна строиться на стандартных PHP-типах `DateTimeImmutable`, `DateTimeInterface` и `DateTimeZone`, предпочтительно как явно подключаемое расширение.
 </details>
 
 <details>
@@ -286,6 +380,8 @@ $engine->addModifier('excerpt', new ExcerptModifier());
 ```
 
 ### Кастомный тег
+
+Встроенные `cache`/`nocache` сейчас не входят в обязательное автономное ядро. Если нужен тег, похожий на кеширование, его можно добавить как пользовательское расширение:
 
 ```php
 // Функция
@@ -343,7 +439,7 @@ $engine->setGlobals([
     'user'      => $currentUser,
 ]);
 
-// Доступны во всех шаблонах без передачи в render()
+// Доступны во всех шаблонах без явной передачи в render()
 echo $engine->render('© {{ year }} {{ site_name }}');
 ```
 

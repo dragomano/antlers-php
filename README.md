@@ -6,6 +6,16 @@ Standalone implementation of the [Antlers](https://statamic.dev/frontend/antlers
 
 [По-русски](README.ru.md)
 
+## Positioning
+
+`antlers-php` targets a standalone Antlers subset for regular PHP projects.
+
+This means the project aims to support the core Antlers language that works predictably without Statamic or Laravel, such as variables, expressions, conditions, loops, modifiers, partials, and custom tags/modifiers.
+
+It does not promise full compatibility with every Statamic tag, modifier, CMS feature, or Laravel-dependent integration.
+
+In particular, `{{? ?}}` and `{{$ $}}` PHP delimiters from Statamic Antlers are intentionally not supported in `antlers-php`. This project keeps PHP execution out of the standalone core instead of exposing it as a template feature.
+
 ## Installation
 
 ```bash
@@ -22,6 +32,19 @@ $engine = new Engine();
 echo $engine->render('Hello, {{ name }}!', ['name' => 'World']);
 // → Hello, World!
 ```
+
+## Security
+
+`antlers-php` does not auto-escape `{{ ... }}` output by default. This is intentional for standalone Antlers compatibility.
+
+When rendering user-provided content into HTML, explicitly escape it with `sanitize` or `entities`:
+
+```antlers
+{{ comment | sanitize }}
+{{ email | entities }}
+```
+
+Treat plain `{{ ... }}` output as raw template output unless you have applied the escaping yourself.
 
 ## Syntax
 
@@ -148,6 +171,8 @@ Paired array loops also support neighbor access via colon notation:
 {{# This text will not appear in the HTML output #}}
 ```
 
+`{{? ?}}` and `{{$ $}}` are not available in this engine. If you need PHP, keep it outside Antlers templates in your application code.
+
 ### Noparse
 
 ```antlers
@@ -165,15 +190,23 @@ Single tag: @{{ name }}
 {{ greeting name="Alice" }}
 
 {{# tag with method (namespace) #}}
-{{ partial:load src="header" }}
+{{ partial:header title="Welcome" }}
 
 {{# paired tag (with content) #}}
-{{ wrap tag="section" }}
-    Content
-{{ /wrap }}
+{{ markdown }}
+**Bold**
+{{ /markdown }}
 ```
 
-### Core Helper Tags
+## Built-in Tags
+
+The standalone core currently registers these built-in tags:
+
+`dump`, `foreach`, `increment`, `layout`, `loop`, `markdown`, `once`, `partial`, `prepend`, `push`, `scope`, `section`, `slot`, `stack`, `svg`, `switch`, `yield`
+
+`set` is also supported as Antlers syntax for variable assignment, but it is language syntax rather than a registered tag from `CoreTags`.
+
+### Core Tag Examples
 
 ```antlers
 {{ partial src="partials/card.antlers.html" title="Hello" }}
@@ -212,6 +245,14 @@ This project intentionally supports an official subset of Statamic modifiers tha
 |--------|-----------|
 | Supported official subset | `add`, `ceil`, `chunk`, `contains`, `count`, `decode`, `divide`, `ends_with`, `entities`, `explode`, `first`, `flatten`, `floor`, `format`, `is_array`, `is_empty`, `is_numeric`, `join`, `kebab`, `keys`, `last`, `lcfirst`, `length`, `limit`, `lower`, `markdown`, `md5`, `mod`, `multiply`, `nl2br`, `pad`, `pluck`, `regex_replace`, `repeat`, `replace`, `reverse`, `round`, `sanitize`, `slugify`, `snake`, `sort`, `starts_with`, `strip_tags`, `studly`, `subtract`, `surround`, `title`, `trim`, `truncate`, `ucfirst`, `unique`, `upper`, `values`, `where`, `word_count`, `wrap` |
 | Not currently included | `add_slashes`, `ampersand_list`, `antlers`, `as`, `ascii`, `at`, `attribute`, `background_position`, `bard_html`, `bard_items`, `bard_text`, `bool_string`, `camelize`, `cdata`, `classes`, `collapse`, `collapse_whitespace`, `compact`, `console_log`, `contains_all`, `contains_any`, `count_substring`, `dashify`, `days_ago`, `deslugify`, `dl`, `dump`, `embed_url`, `ensure_left`, `ensure_right`, `excerpt`, `favicon`, `filter_empty`, `flip`, `format_number`, `format_translated`, `full_urls`, `get`, `gravatar`, `group_by`, `has_lower_case`, `has_upper_case`, `headline`, `hex_to_rgb`, `hours_ago`, `image`, `in_array`, `insert`, `is_after`, `is_alpha`, `is_alphanumeric`, `is_before`, `is_between`, `is_blank`, `is_email`, `is_embeddable`, `is_external_url`, `is_future`, `is_json`, `is_leap_year`, `is_lowercase`, `is_numberwang`, `is_past`, `is_today`, `is_tomorrow`, `is_uppercase`, `is_url`, `is_weekday`, `is_weekend`, `is_yesterday`, `iso_format`, `link`, `list`, `macro`, `mailto`, `mark`, `minutes_ago`, `modify_date`, `months_ago`, `obfuscate`, `obfuscate_email`, `offset`, `ol`, `option_list`, `output`, `parse_url`, `partial`, `pathinfo`, `piped`, `plural`, `random`, `raw`, `rawurlencode`, `rawurlencode_except_slashes`, `ray`, `read_time`, `regex_mark`, `relative`, `remove_left`, `remove_right`, `safe_truncate`, `seconds_ago`, `segment`, `select`, `sentence_list`, `shuffle`, `singular`, `smartypants`, `spaceless`, `str_pad_left`, `substr`, `sum`, `swap_case`, `table`, `tidy`, `timezone`, `to_json`, `to_qs`, `to_spaces`, `to_tabs`, `ul`, `underscored`, `url`, `urlencode`, `urlencode_except_slashes`, `where-in`, `weeks_ago`, `widont`, `years_ago` |
+
+### Disputed Statamic Modifiers
+
+`antlers`, `partial`, and `raw` are intentionally excluded from the standalone modifier API.
+
+- `partial` stays a tag concern in this project: use `partial`, `partial:exists`, and `partial:if_exists` instead of a modifier.
+- `antlers` is not part of the first stable standalone core because re-rendering strings as templates needs a separate execution model and explicit recursion safeguards.
+- `raw` is not included because `antlers-php` does not auto-escape output by default; literal/raw behavior is already covered by normal output, `@{{ ... }}`, and `noparse`.
 
 <details>
 <summary><strong>String</strong></summary>
@@ -288,6 +329,15 @@ This project intentionally supports an official subset of Statamic modifiers tha
 | Modifier | Description | Example |
 |----------|-------------|---------|
 | `format` | Format a date | `{{ date \| format:"d.m.Y" }}` |
+
+Current standalone strategy:
+
+- The built-in date/time surface is intentionally minimal and currently limited to `format`.
+- `format` accepts Unix timestamps and strings that PHP can parse via `strtotime()`.
+- If parsing fails, the original string is returned unchanged.
+- Carbon is intentionally not a dependency of this project.
+- Carbon-style or locale-aware modifiers such as `iso_format`, `modify_date`, `days_ago`, `is_today`, or `timezone` are not part of the first stable standalone core.
+- If richer date/time support is added later, it should be built on native PHP types such as `DateTimeImmutable`, `DateTimeInterface`, and `DateTimeZone`, preferably as an opt-in extension.
 </details>
 
 <details>
@@ -330,6 +380,8 @@ $engine->addModifier('excerpt', new ExcerptModifier());
 ```
 
 ### Custom Tag
+
+Built-in `cache`/`nocache` are not part of the required standalone core right now. If you need cache-like behavior, you can add it as a custom extension:
 
 ```php
 // Callable
