@@ -44,6 +44,7 @@ describe('Lexer', function (): void {
             ->and($this->lexer->tokenize('!=')[0]->type)->toBe(TokenType::NotEq)
             ->and($this->lexer->tokenize('===')[0]->type)->toBe(TokenType::EqEqEq)
             ->and($this->lexer->tokenize('!==')[0]->type)->toBe(TokenType::NotEqEq)
+            ->and($this->lexer->tokenize('<=>')[0]->type)->toBe(TokenType::Spaceship)
             ->and($this->lexer->tokenize('<=')[0]->type)->toBe(TokenType::LtEq)
             ->and($this->lexer->tokenize('>=')[0]->type)->toBe(TokenType::GtEq);
     });
@@ -57,6 +58,7 @@ describe('Lexer', function (): void {
     it('tokenizes logical keywords', function (): void {
         expect($this->lexer->tokenize('and')[0]->type)->toBe(TokenType::And)
             ->and($this->lexer->tokenize('or')[0]->type)->toBe(TokenType::Or)
+            ->and($this->lexer->tokenize('xor')[0]->type)->toBe(TokenType::Xor)
             ->and($this->lexer->tokenize('not')[0]->type)->toBe(TokenType::Not);
     });
 
@@ -66,6 +68,15 @@ describe('Lexer', function (): void {
 
     it('tokenizes gatekeeper operator', function (): void {
         expect($this->lexer->tokenize('?=')[0]->type)->toBe(TokenType::QEquals);
+    });
+
+    it('tokenizes power and compound assignment operators', function (): void {
+        expect($this->lexer->tokenize('**')[0]->type)->toBe(TokenType::Power)
+            ->and($this->lexer->tokenize('+=')[0]->type)->toBe(TokenType::PlusEquals)
+            ->and($this->lexer->tokenize('-=')[0]->type)->toBe(TokenType::MinusEquals)
+            ->and($this->lexer->tokenize('*=')[0]->type)->toBe(TokenType::StarEquals)
+            ->and($this->lexer->tokenize('/=')[0]->type)->toBe(TokenType::SlashEquals)
+            ->and($this->lexer->tokenize('%=')[0]->type)->toBe(TokenType::PercentEquals);
     });
 
     it('tokenizes explicit variable prefix', function (): void {

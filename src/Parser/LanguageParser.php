@@ -7,6 +7,7 @@ namespace Bugo\Antlers\Parser;
 use Bugo\Antlers\Exceptions\AntlersSyntaxException;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\AntlersNode;
+use Bugo\Antlers\Nodes\ArrayNode;
 use Bugo\Antlers\Nodes\AssignmentNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\BooleanNode;
@@ -475,7 +476,15 @@ final class LanguageParser
     {
         $expr = $this->parsePipedExpression();
 
-        if (! $this->peek()->is(TokenType::Equals)) {
+        $operator = $this->peek();
+        if (! $operator->is(
+            TokenType::Equals,
+            TokenType::PlusEquals,
+            TokenType::MinusEquals,
+            TokenType::StarEquals,
+            TokenType::SlashEquals,
+            TokenType::PercentEquals,
+        )) {
             return $expr;
         }
 
@@ -483,9 +492,22 @@ final class LanguageParser
             throw new AntlersSyntaxException('Assignment target must be a variable path');
         }
 
-        $this->consume(TokenType::Equals);
+        $this->advance();
 
-        return new AssignmentNode($expr->path, $this->parseAssignmentExpression());
+        $value = $this->parseAssignmentExpression();
+
+        if ($operator->is(TokenType::Equals)) {
+            return new AssignmentNode($expr->path, $value);
+        }
+
+        return new AssignmentNode(
+            $expr->path,
+            new BinaryOpNode(
+                new VariableNode($expr->path),
+                $this->compoundAssignmentOperator($operator),
+                $value,
+            ),
+        );
     }
 
     private function parsePipedExpression(): AbstractNode
@@ -737,6 +759,10 @@ final class LanguageParser
             return $expr;
         }
 
+        if ($token->is(TokenType::LBracket)) {
+            return $this->parseArrayLiteral();
+        }
+
         // Number literal
         if ($token->is(TokenType::Number)) {
             $this->advance();
@@ -818,6 +844,34 @@ final class LanguageParser
         }
 
         return new VariableNode($path);
+    }
+
+    private function parseArrayLiteral(): ArrayNode
+    {
+        $this->consume(TokenType::LBracket);
+
+        $items = [];
+        if ($this->peek()->is(TokenType::RBracket)) {
+            $this->consume(TokenType::RBracket);
+
+            return new ArrayNode([]);
+        }
+
+        while (true) {
+            $items[] = $this->parseAssignmentExpression();
+
+            if ($this->peek()->is(TokenType::Comma)) {
+                $this->advance();
+
+                continue;
+            }
+
+            break;
+        }
+
+        $this->consume(TokenType::RBracket);
+
+        return new ArrayNode($items);
     }
 
     private function parseExplicitVariablePath(): VariableNode
@@ -1223,8 +1277,10 @@ final class LanguageParser
         return match (true) {
             $token->is(TokenType::QQ) => 1,  // ??  right-assoc
             $token->is(TokenType::Or) => 2,  // ||
+            $token->is(TokenType::Xor) => 2,  // xor
             $token->is(TokenType::And) => 3,  // &&
             $token->is(
+                TokenType::Spaceship,
                 TokenType::EqEq,
                 TokenType::NotEq,
                 TokenType::EqEqEq,
@@ -1239,12 +1295,25 @@ final class LanguageParser
             $token->is(TokenType::Dot) => 6,  // . string concat
             $token->is(TokenType::Plus, TokenType::Minus) => 7,  // + -
             $token->is(
+                TokenType::Power,
                 TokenType::Star,
                 TokenType::Slash,
                 TokenType::Percent,
-            ) => 8,  // * / %
+            ) => 8,  // ** * / %
             $token->is(TokenType::Caret) => 9,  // ^ (right-assoc, but impl as left here)
             default => null,
+        };
+    }
+
+    private function compoundAssignmentOperator(Token $token): string
+    {
+        return match ($token->type) {
+            TokenType::PlusEquals => '+',
+            TokenType::MinusEquals => '-',
+            TokenType::StarEquals => '*',
+            TokenType::SlashEquals => '/',
+            TokenType::PercentEquals => '%',
+            default => throw new AntlersSyntaxException("Unsupported assignment operator: {$token->value}"),
         };
     }
 

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Exceptions\AntlersSyntaxException;
 use Bugo\Antlers\Nodes\AssignmentNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\CollectionOperationNode;
@@ -94,5 +95,25 @@ describe('LanguageParser', function (): void {
 
         expect($node)->toBeInstanceOf(VariableNode::class)
             ->and($node->path)->toBe('user:profile:name');
+    });
+
+    it('throws a syntax exception for an invalid assignment target', function (): void {
+        expect(fn() => $this->languageParser->parseExpression('count + 1 = total'))
+            ->toThrow(AntlersSyntaxException::class, 'Assignment target must be a variable path');
+    });
+
+    it('throws a syntax exception for an unterminated ternary expression', function (): void {
+        expect(fn() => $this->languageParser->parseExpression('logged_in ? "yes"'))
+            ->toThrow(AntlersSyntaxException::class, 'Unterminated ternary expression');
+    });
+
+    it('throws a syntax exception for an empty statement before a terminator', function (): void {
+        expect(fn() => $this->languageParser->parseExpression('; count'))
+            ->toThrow(AntlersSyntaxException::class, 'Unexpected token [T_SEMICOLON:;] in expression');
+    });
+
+    it('throws a syntax exception when an explicit variable path is incomplete', function (): void {
+        expect(fn() => $this->languageParser->parseExpression('$user:'))
+            ->toThrow(AntlersSyntaxException::class, 'Expected identifier after T_COLON in variable path');
     });
 });

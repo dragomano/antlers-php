@@ -6,6 +6,7 @@ namespace Bugo\Antlers\Runtime;
 
 use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\Nodes\AbstractNode;
+use Bugo\Antlers\Nodes\ArrayNode;
 use Bugo\Antlers\Nodes\AssignmentNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\BooleanNode;
@@ -45,6 +46,7 @@ final readonly class ExpressionEvaluator
             $node instanceof NumberNode              => $node->value,
             $node instanceof BooleanNode             => $node->value,
             $node instanceof NullNode                => null,
+            $node instanceof ArrayNode               => $this->evalArray($node, $scope, $assignmentWriter),
             $node instanceof StringValueNode         => $this->evalString($node, $scope),
             $node instanceof VariableNode            => $this->resolveVariable($node->path, $scope),
             $node instanceof AssignmentNode          => $this->evalAssignment($node, $scope, $assignmentWriter),
@@ -146,6 +148,10 @@ final readonly class ExpressionEvaluator
 
         $right = $this->evaluateResult($node->right, $scope, $assignmentWriter);
 
+        if ($op === 'xor') {
+            return $this->isTruthy($left->value) xor $this->isTruthy($right->value);
+        }
+
         $leftNumeric  = $this->coerceNumeric($left->value);
         $rightNumeric = $this->coerceNumeric($right->value);
 
@@ -159,8 +165,10 @@ final readonly class ExpressionEvaluator
             '%'     => $rightNumeric != 0
                         ? fmod((float) $leftNumeric, (float) $rightNumeric)
                         : throw new AntlersRuntimeException('Modulo by zero'),
+            '**'    => $this->power((float) $leftNumeric, (float) $rightNumeric),
             '^'     => $this->power((float) $leftNumeric, (float) $rightNumeric),
             '.'     => $this->stringify($left->value) . $this->stringify($right->value),
+            '<=>'   => $this->compareSortValues($left->value, $right->value),
             '=='    => $left->value == $right->value,
             '!='    => $left->value != $right->value,
             '==='   => $left->value === $right->value,
@@ -171,6 +179,18 @@ final readonly class ExpressionEvaluator
             '>='    => $left->value >= $right->value,
             default => throw new AntlersRuntimeException("Unknown binary operator: $op"),
         };
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<mixed>
+     */
+    private function evalArray(ArrayNode $node, array $scope, ?callable $assignmentWriter = null): array
+    {
+        return array_map(
+            fn(AbstractNode $item): mixed => $this->evaluate($item, $scope, $assignmentWriter),
+            $node->items,
+        );
     }
 
     /**

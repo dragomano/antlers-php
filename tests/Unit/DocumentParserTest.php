@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Exceptions\AntlersSyntaxException;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\AntlersNode;
 use Bugo\Antlers\Nodes\LiteralNode;
@@ -77,5 +78,35 @@ describe('DocumentParser', function (): void {
         $literals = array_filter($nodes, fn(AbstractNode $n): bool => $n instanceof LiteralNode);
         $content  = implode('', array_map(fn(LiteralNode $n): string => $n->content, $literals));
         expect($content)->toContain('{{ raw }}');
+    });
+
+    it('throws a syntax exception for an unclosed antlers tag with the source line', function (): void {
+        try {
+            $this->parser->parse("Before\n{{ name");
+            $this->fail('Expected AntlersSyntaxException was not thrown.');
+        } catch (AntlersSyntaxException $e) {
+            expect($e->getMessage())->toBe('Unclosed Antlers tag {{')
+                ->and($e->templateLine)->toBe(2);
+        }
+    });
+
+    it('throws a syntax exception for an unclosed comment with the source line', function (): void {
+        try {
+            $this->parser->parse("Before\n{{# comment");
+            $this->fail('Expected AntlersSyntaxException was not thrown.');
+        } catch (AntlersSyntaxException $e) {
+            expect($e->getMessage())->toBe('Unclosed Antlers comment {{#')
+                ->and($e->templateLine)->toBe(2);
+        }
+    });
+
+    it('throws a syntax exception for an unclosed noparse block with the opening line', function (): void {
+        try {
+            $this->parser->parse("Before\n{{ noparse }}{{ name }}");
+            $this->fail('Expected AntlersSyntaxException was not thrown.');
+        } catch (AntlersSyntaxException $e) {
+            expect($e->getMessage())->toBe('Unclosed noparse block {{ noparse }}')
+                ->and($e->templateLine)->toBe(2);
+        }
     });
 });

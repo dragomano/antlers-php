@@ -72,6 +72,12 @@ final class Lexer
             }
 
             // Multi-char operators — check longer first
+            if ($this->tryRead('<=>')) {
+                $this->add(TokenType::Spaceship, '<=>');
+
+                continue;
+            }
+
             if ($this->tryRead('===')) {
                 $this->add(TokenType::EqEqEq, '===');
 
@@ -126,8 +132,44 @@ final class Lexer
                 continue;
             }
 
+            if ($this->tryRead('**')) {
+                $this->add(TokenType::Power, '**');
+
+                continue;
+            }
+
             if ($this->tryRead('?=')) {
                 $this->add(TokenType::QEquals, '?=');
+
+                continue;
+            }
+
+            if ($this->tryRead('+=')) {
+                $this->add(TokenType::PlusEquals, '+=');
+
+                continue;
+            }
+
+            if ($this->tryRead('-=')) {
+                $this->add(TokenType::MinusEquals, '-=');
+
+                continue;
+            }
+
+            if ($this->tryRead('*=')) {
+                $this->add(TokenType::StarEquals, '*=');
+
+                continue;
+            }
+
+            if ($this->tryRead('/=')) {
+                $this->add(TokenType::SlashEquals, '/=');
+
+                continue;
+            }
+
+            if ($this->tryRead('%=')) {
+                $this->add(TokenType::PercentEquals, '%=');
 
                 continue;
             }
@@ -271,6 +313,7 @@ final class Lexer
             'null'  => TokenType::Null,
             'and'   => TokenType::And,
             'or'    => TokenType::Or,
+            'xor'   => TokenType::Xor,
             'not'   => TokenType::Not,
             'as'    => TokenType::As,
             default => TokenType::Identifier,
