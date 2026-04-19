@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Exceptions\AntlersRuntimeException;
+
 function fixturePath(string $relative): string
 {
     return dirname(__DIR__) . '/Fixtures/CoreTags/' . $relative;
@@ -116,6 +118,16 @@ it('does not leak assignments made inside partials back to the caller scope', fu
     expect(engine()->renderFile($wrapper, ['title' => 'Outer']))->toBe('Inner|Outer');
 });
 
+it('throws on recursive partial self-inclusion', function (): void {
+    expect(fn(): string => engine()->renderFile(fixturePath('partial/recursive/self.antlers.html')))
+        ->toThrow(AntlersRuntimeException::class, 'Recursive template rendering detected');
+});
+
+it('throws on recursive partial inclusion cycles', function (): void {
+    expect(fn(): string => engine()->renderFile(fixturePath('partial/recursive/a.antlers.html')))
+        ->toThrow(AntlersRuntimeException::class, 'Recursive template rendering detected');
+});
+
 it('supports section and yield tags', function (): void {
     $tpl = <<<'ANTLERS'
     {{ section:hero }}<h1>{{ title }}</h1>{{ /section:hero }}
@@ -221,6 +233,11 @@ it('blocks partial path traversal outside the current template root', function (
 
 it('blocks svg path traversal outside the current template root', function (): void {
     expect(rtrim(engine()->renderFile(fixturePath('svg/security/template.antlers.html'))))->toBe('');
+});
+
+it('throws on recursive layout rendering', function (): void {
+    expect(fn(): string => engine()->renderFile(fixturePath('layout/recursive/wrapper.antlers.html')))
+        ->toThrow(AntlersRuntimeException::class, 'Recursive template rendering detected');
 });
 
 it('supports increment tag', function (): void {

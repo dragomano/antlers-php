@@ -88,3 +88,11 @@ it('blocks renderView path traversal outside configured view paths', function ()
     expect(fn(): string => $e->renderView('../main'))
         ->toThrow(AntlersRuntimeException::class, 'Template view not found');
 });
+
+it('throws on recursive view rendering', function (): void {
+    $e = engine();
+    $e->setViewPaths(renderViewFixture('views'));
+
+    expect(fn(): string => $e->renderView('recursive/main'))
+        ->toThrow(AntlersRuntimeException::class, 'Recursive template rendering detected');
+});

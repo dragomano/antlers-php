@@ -54,6 +54,9 @@ final class NodeProcessor
     private array $templatePathStack = [];
 
     /** @var string[] */
+    private array $templateRenderStack = [];
+
+    /** @var string[] */
     private array $viewPaths = [];
 
     /** @var list<array{name: string, method: string, line: int, signature: string}> */
@@ -572,12 +575,18 @@ final class NodeProcessor
             throw new AntlersRuntimeException("Template file not found: $resolved");
         }
 
-        $this->templatePathStack[] = dirname($resolved);
+        if (in_array($resolved, $this->templateRenderStack, true)) {
+            throw new AntlersRuntimeException("Recursive template rendering detected: $resolved");
+        }
+
+        $this->templateRenderStack[] = $resolved;
+        $this->templatePathStack[]   = dirname($resolved);
 
         try {
             return $this->renderTemplate((string) file_get_contents($resolved), $data);
         } finally {
             array_pop($this->templatePathStack);
+            array_pop($this->templateRenderStack);
         }
     }
 
