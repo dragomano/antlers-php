@@ -85,3 +85,13 @@ it('omits tag parameters when string interpolation resolves to void', function (
     expect($e->render('{{ probe class="{wide ? \'w-full\' : void}" }}', ['wide' => true]))->toBe('w-full')
         ->and($e->render('{{ probe class="{wide ? \'w-full\' : void}" }}', ['wide' => false]))->toBe('missing');
 });
+
+it('supports shorthand dynamic tag parameters with :$name syntax', function (): void {
+    $e = engine();
+    $e->addTag('probe', fn(array $params): string => ($params['id'] ?? 'missing') . '|' . ($params['class'] ?? 'missing'));
+
+    expect($e->render('{{ probe :$id :$class }}', [
+        'id'    => 'entry-1',
+        'class' => 'hero',
+    ]))->toBe('entry-1|hero');
+});

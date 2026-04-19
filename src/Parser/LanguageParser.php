@@ -336,6 +336,24 @@ final class LanguageParser
                 $pos++;
             }
 
+            if ($isDynamic && $pos < $length && $raw[$pos] === '$') {
+                $pos++;
+
+                $nameStart = $pos;
+                while ($pos < $length && (ctype_alnum($raw[$pos]) || $raw[$pos] === '_' || $raw[$pos] === '-')) {
+                    $pos++;
+                }
+
+                $variable = substr($raw, $nameStart, $pos - $nameStart);
+                if ($variable === '') {
+                    break;
+                }
+
+                $params[$variable] = new VariableNode($variable);
+
+                continue;
+            }
+
             while ($pos < $length && (ctype_alnum($raw[$pos]) || $raw[$pos] === '_' || $raw[$pos] === '-')) {
                 $pos++;
             }
@@ -1205,7 +1223,7 @@ final class LanguageParser
         }
 
         // Identifier followed by key="value" param pattern
-        return (bool) preg_match('/^\w+\s+[\w-]+=/', $raw);
+        return (bool) preg_match('/^\w+\s+(?::\$\w+|:?[\w-]+=)/', $raw);
     }
 
     private function isForeachLoopSyntax(string $raw): bool

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Bugo\Antlers\Exceptions\AntlersSyntaxException;
+use Bugo\Antlers\Nodes\AntlersNode;
 use Bugo\Antlers\Nodes\AssignmentNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\CollectionOperationNode;
@@ -10,6 +11,7 @@ use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
 use Bugo\Antlers\Nodes\SequenceNode;
+use Bugo\Antlers\Nodes\TagNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Nodes\VariableNode;
 use Bugo\Antlers\Nodes\VoidNode;
@@ -102,6 +104,21 @@ describe('LanguageParser', function (): void {
         $node = $this->languageParser->parseExpression('void');
 
         expect($node)->toBeInstanceOf(VoidNode::class);
+    });
+
+    it('expands shorthand dynamic tag parameters with :$name syntax', function (): void {
+        $node            = new AntlersNode();
+        $node->name      = 'probe';
+        $node->rawContent = 'probe :$id :$class';
+
+        $parsed = $this->languageParser->parseNode($node);
+
+        expect($parsed)->toBeInstanceOf(TagNode::class)
+            ->and($parsed->parameters)->toHaveKeys(['id', 'class'])
+            ->and($parsed->parameters['id'])->toBeInstanceOf(VariableNode::class)
+            ->and($parsed->parameters['id']->path)->toBe('id')
+            ->and($parsed->parameters['class'])->toBeInstanceOf(VariableNode::class)
+            ->and($parsed->parameters['class']->path)->toBe('class');
     });
 
     it('throws a syntax exception for an invalid assignment target', function (): void {
