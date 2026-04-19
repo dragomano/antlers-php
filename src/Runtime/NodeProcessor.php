@@ -476,6 +476,11 @@ final class NodeProcessor
             $node->parameters,
         );
 
+        $params = array_filter(
+            $params,
+            static fn(mixed $value): bool => ! $value instanceof VoidValue,
+        );
+
         $result = $this->handleTagResult($node, $params, $scope);
 
         if ($result->value === null) {

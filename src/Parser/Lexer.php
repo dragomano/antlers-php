@@ -311,6 +311,7 @@ final class Lexer
             'true'  => TokenType::True,
             'false' => TokenType::False,
             'null'  => TokenType::Null,
+            'void'  => TokenType::Void,
             'and'   => TokenType::And,
             'or'    => TokenType::Or,
             'xor'   => TokenType::Xor,

@@ -70,3 +70,18 @@ it('prefers colon-notation variables over matching tag methods when the path exi
         'user' => ['profile' => ['name' => 'Alice']],
     ]))->toBe('Alice');
 });
+
+it('omits tag parameters explicitly set to void', function (): void {
+    $e = engine();
+    $e->addTag('probe', fn(array $params): string => array_key_exists('class', $params) ? (string) $params['class'] : 'missing');
+
+    expect($e->render('{{ probe class=void }}'))->toBe('missing');
+});
+
+it('omits tag parameters when string interpolation resolves to void', function (): void {
+    $e = engine();
+    $e->addTag('probe', fn(array $params): string => array_key_exists('class', $params) ? (string) $params['class'] : 'missing');
+
+    expect($e->render('{{ probe class="{wide ? \'w-full\' : void}" }}', ['wide' => true]))->toBe('w-full')
+        ->and($e->render('{{ probe class="{wide ? \'w-full\' : void}" }}', ['wide' => false]))->toBe('missing');
+});

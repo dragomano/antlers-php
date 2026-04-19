@@ -12,6 +12,7 @@ use Bugo\Antlers\Nodes\NullCoalesceNode;
 use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Nodes\VariableNode;
+use Bugo\Antlers\Nodes\VoidNode;
 use Bugo\Antlers\Parser\LanguageParser;
 
 describe('LanguageParser', function (): void {
@@ -95,6 +96,12 @@ describe('LanguageParser', function (): void {
 
         expect($node)->toBeInstanceOf(VariableNode::class)
             ->and($node->path)->toBe('user:profile:name');
+    });
+
+    it('parses void as a dedicated literal node', function (): void {
+        $node = $this->languageParser->parseExpression('void');
+
+        expect($node)->toBeInstanceOf(VoidNode::class);
     });
 
     it('throws a syntax exception for an invalid assignment target', function (): void {

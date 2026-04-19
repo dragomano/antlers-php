@@ -19,6 +19,7 @@ enum TokenType: string
     case True   = 'T_TRUE';   // true
     case False  = 'T_FALSE';  // false
     case Null   = 'T_NULL';   // null
+    case Void   = 'T_VOID';   // void
 
     // Arithmetic operators
     case Plus          = 'T_PLUS';          // +

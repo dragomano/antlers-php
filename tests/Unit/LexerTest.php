@@ -83,6 +83,10 @@ describe('Lexer', function (): void {
         expect($this->lexer->tokenize('$name')[0]->type)->toBe(TokenType::Dollar);
     });
 
+    it('tokenizes void keyword', function (): void {
+        expect($this->lexer->tokenize('void')[0]->type)->toBe(TokenType::Void);
+    });
+
     it('tokenizes semicolon statement separators', function (): void {
         expect($this->lexer->tokenize(';')[0]->type)->toBe(TokenType::Semicolon);
     });

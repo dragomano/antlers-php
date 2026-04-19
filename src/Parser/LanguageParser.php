@@ -31,6 +31,7 @@ use Bugo\Antlers\Nodes\TagNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
 use Bugo\Antlers\Nodes\VariableNode;
+use Bugo\Antlers\Nodes\VoidNode;
 
 /**
  * Stage 3: Parses AntlersNode raw content + children into typed AST nodes.
@@ -796,6 +797,12 @@ final class LanguageParser
             $this->advance();
 
             return new NullNode();
+        }
+
+        if ($token->is(TokenType::Void)) {
+            $this->advance();
+
+            return new VoidNode();
         }
 
         if ($token->is(TokenType::Dollar)) {

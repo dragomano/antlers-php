@@ -24,6 +24,7 @@ use Bugo\Antlers\Nodes\StringValueNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
 use Bugo\Antlers\Nodes\VariableNode;
+use Bugo\Antlers\Nodes\VoidNode;
 use Traversable;
 
 /**
@@ -46,6 +47,7 @@ final readonly class ExpressionEvaluator
             $node instanceof NumberNode              => $node->value,
             $node instanceof BooleanNode             => $node->value,
             $node instanceof NullNode                => null,
+            $node instanceof VoidNode                => VoidValue::instance(),
             $node instanceof ArrayNode               => $this->evalArray($node, $scope, $assignmentWriter),
             $node instanceof StringValueNode         => $this->evalString($node, $scope),
             $node instanceof VariableNode            => $this->resolveVariable($node->path, $scope),
@@ -103,10 +105,14 @@ final readonly class ExpressionEvaluator
     /**
      * @param array<string, mixed> $scope
      */
-    private function evalString(StringValueNode $node, array $scope): string
+    private function evalString(StringValueNode $node, array $scope): mixed
     {
         if (! $node->hasInterpolations) {
             return $node->value;
+        }
+
+        if (count($node->parts) === 1 && ! is_string($node->parts[0])) {
+            return $this->evaluate($node->parts[0], $scope);
         }
 
         $result = '';
@@ -330,6 +336,10 @@ final readonly class ExpressionEvaluator
 
     public function isTruthy(mixed $value): bool
     {
+        if ($value instanceof VoidValue) {
+            return false;
+        }
+
         if ($value === null || $value === false) {
             return false;
         }
@@ -343,6 +353,10 @@ final readonly class ExpressionEvaluator
 
     public function stringify(mixed $value): string
     {
+        if ($value instanceof VoidValue) {
+            return '';
+        }
+
         if ($value === null) {
             return '';
         }
