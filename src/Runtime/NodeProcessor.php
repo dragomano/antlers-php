@@ -564,6 +564,10 @@ final class NodeProcessor
     public function renderTemplateFile(string $path, array $data = []): string
     {
         $resolved = $this->resolveTemplatePath($path);
+        if ($resolved === '') {
+            throw new AntlersRuntimeException("Template file is outside the configured template roots: $path");
+        }
+
         if (! is_file($resolved)) {
             throw new AntlersRuntimeException("Template file not found: $resolved");
         }
@@ -752,17 +756,28 @@ final class NodeProcessor
             return $path;
         }
 
-        if ($path[0] === '/' || preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1) {
-            return $path;
+        $roots = $this->templateSearchRoots();
+
+        if ($this->isAbsolutePath($path)) {
+            if (! $this->hasConfiguredViewPaths()) {
+                return $path;
+            }
+
+            return $this->absolutePathWithinRoots($path, $roots) ?? '';
         }
 
-        $roots    = $this->templateSearchRoots();
-        $resolved = $this->firstExistingTemplatePath($roots, [$path]);
+        $resolved = $this->hasConfiguredViewPaths()
+            ? $this->firstExistingSafeTemplatePath($roots, [$path])
+            : $this->firstExistingTemplatePath($roots, [$path]);
         if ($resolved !== null) {
             return $resolved;
         }
 
-        return $this->joinPath($roots[0], $path);
+        if (! $this->hasConfiguredViewPaths()) {
+            return $this->joinPath($roots[0], $path);
+        }
+
+        return $this->resolvePathWithinRoot($roots[0], $path) ?? '';
     }
 
     public function resolveTemplateTagPath(string $path): string
@@ -771,12 +786,12 @@ final class NodeProcessor
             return $path;
         }
 
-        if ($path[0] === '/' || preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1) {
+        if ($this->isAbsolutePath($path)) {
             return '';
         }
 
         $roots    = $this->templateSearchRoots();
-        $resolved = $this->firstExistingSafeTemplatePath($roots, $path);
+        $resolved = $this->firstExistingSafeTemplatePath($roots, [$path]);
         if ($resolved !== null) {
             return $resolved;
         }
@@ -826,14 +841,18 @@ final class NodeProcessor
             $candidates[] = $name . '.antlers.html';
         }
 
-        $resolved = $this->firstExistingTemplatePath(array_values($this->viewPaths), $candidates);
+        $viewRoots = array_values($this->viewPaths);
+
+        $resolved = $this->firstExistingSafeTemplatePath($viewRoots, $candidates);
         if ($resolved !== null) {
             return $resolved;
         }
 
-        return $this->viewPaths !== []
-            ? $this->joinPath($this->viewPaths[0], $candidates[0])
-            : $this->resolveTemplatePath($candidates[0]);
+        if ($viewRoots !== []) {
+            return $this->resolvePathWithinRoot($viewRoots[0], $candidates[0]) ?? '';
+        }
+
+        return $this->resolveTemplatePath($candidates[0]);
     }
 
     /**
@@ -1134,13 +1153,15 @@ final class NodeProcessor
             $roots[] = $this->templatePathStack[count($this->templatePathStack) - 1];
         }
 
-        foreach ($this->viewPaths as $viewPath) {
-            $roots[] = $viewPath;
+        foreach ($this->viewPaths as $templateRoot) {
+            $roots[] = $templateRoot;
         }
 
-        $roots[] = (string) getcwd();
+        if ($roots === []) {
+            $roots[] = (string) getcwd();
+        }
 
-        return $roots;
+        return array_values(array_unique($roots));
     }
 
     /**
@@ -1163,21 +1184,48 @@ final class NodeProcessor
 
     /**
      * @param list<string> $roots
+     * @param list<string> $candidates
      */
-    private function firstExistingSafeTemplatePath(array $roots, string $path): ?string
+    private function firstExistingSafeTemplatePath(array $roots, array $candidates): ?string
     {
         foreach ($roots as $root) {
-            $resolved = $this->resolvePathWithinRoot($root, $path);
-            if ($resolved === null) {
-                continue;
-            }
+            foreach ($candidates as $candidate) {
+                $resolved = $this->resolvePathWithinRoot($root, $candidate);
+                if ($resolved === null) {
+                    continue;
+                }
 
-            if (is_file($resolved)) {
-                return $resolved;
+                if (is_file($resolved)) {
+                    return $resolved;
+                }
             }
         }
 
         return null;
+    }
+
+    /**
+     * @param list<string> $roots
+     */
+    private function absolutePathWithinRoots(string $path, array $roots): ?string
+    {
+        $normalized = $this->normalizePath($path);
+        if ($normalized === null) {
+            return null;
+        }
+
+        foreach ($roots as $root) {
+            if ($this->isPathWithinRoot($normalized, $root)) {
+                return $normalized;
+            }
+        }
+
+        return null;
+    }
+
+    private function hasConfiguredViewPaths(): bool
+    {
+        return $this->viewPaths !== [];
     }
 
     private function joinPath(string $root, string $path): string
@@ -1203,11 +1251,24 @@ final class NodeProcessor
             return null;
         }
 
+        return $this->isPathWithinRoot($normalized, $rootReal) ? $normalized : null;
+    }
+
+    private function isPathWithinRoot(string $path, string $root): bool
+    {
+        $rootReal = realpath(rtrim($root, DIRECTORY_SEPARATOR));
+        if ($rootReal === false) {
+            return false;
+        }
+
         $rootPrefix = $rootReal . DIRECTORY_SEPARATOR;
 
-        return $normalized === $rootReal || str_starts_with($normalized, $rootPrefix)
-            ? $normalized
-            : null;
+        return $path === $rootReal || str_starts_with($path, $rootPrefix);
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        return $path !== '' && ($path[0] === '/' || preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1);
     }
 
     private function normalizePath(string $path): ?string

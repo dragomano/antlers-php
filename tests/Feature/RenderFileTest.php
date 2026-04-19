@@ -49,6 +49,14 @@ it('local data overrides globals in a file', function (): void {
     expect($e->renderFile(renderFileFixture('name.antlers.html'), ['name' => 'Local']))->toBe('Local');
 });
 
+it('blocks renderFile outside configured template roots', function (): void {
+    $e = engine();
+    $e->setViewPaths(renderFileFixture(''));
+
+    expect(fn(): string => $e->renderFile(dirname(__DIR__) . '/Fixtures/CoreTags/outside.antlers.html'))
+        ->toThrow(AntlersRuntimeException::class, 'outside the configured template roots');
+});
+
 it('renders a view by name from configured view paths', function (): void {
     $e = engine();
     $e->setViewPaths(renderViewFixture('views'));
@@ -71,4 +79,12 @@ it('falls back across multiple configured view paths', function (): void {
     ]);
 
     expect(rtrim($e->renderView('shared/message', ['name' => 'Alice'])))->toBe('Hello, Alice!');
+});
+
+it('blocks renderView path traversal outside configured view paths', function (): void {
+    $e = engine();
+    $e->setViewPaths(renderViewFixture('views/pages'));
+
+    expect(fn(): string => $e->renderView('../main'))
+        ->toThrow(AntlersRuntimeException::class, 'Template view not found');
 });
