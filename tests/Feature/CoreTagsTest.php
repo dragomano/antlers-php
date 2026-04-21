@@ -52,6 +52,38 @@ it('supports foreach array parameter forms', function (): void {
     expect(engine()->render($tpl, $data))->toBe('Track A=4/5|Track B=5/5|');
 });
 
+it('supports foreach string paths, iterable limits, zero limits, and missing sources', function (): void {
+    $iterable = new ArrayIterator([
+        'Track A' => '4/5',
+        'Track B' => '5/5',
+        'Track C' => '3/5',
+    ]);
+
+    expect(engine()->render('{{ foreach array="reviews.songs" as="song|rating" }}{{ song }}={{ rating }}|{{ /foreach }}', [
+        'reviews' => ['songs' => $iterable],
+    ]))->toBe('Track A=4/5|Track B=5/5|Track C=3/5|')
+        ->and(engine()->render('{{ foreach array=items limit=2 }}
+{{ value }}{{ /foreach }}', ['items' => new ArrayIterator(['a', 'b', 'c'])]))
+        ->toBe('ab')
+        ->and(engine()->render('{{ foreach array=items limit=0 }}{{ value }}{{ /foreach }}', ['items' => [1, 2, 3]]))
+        ->toBe('')
+        ->and(engine()->render('{{ foreach:missing }}{{ value }}{{ /foreach:missing }}'))
+        ->toBe('')
+        ->and(engine()->render('{{ foreach }}{{ value }}{{ /foreach }}'))
+        ->toBe('');
+});
+
+it('trims trailing boundary whitespace inside foreach blocks', function (): void {
+    $tpl = <<<'ANTLERS'
+    {{ foreach array=items }}
+    {{ value }}
+    
+    {{ /foreach }}
+    ANTLERS;
+
+    expect(engine()->render($tpl, ['items' => ['A', 'B']]))->toBe('AB');
+});
+
 it('supports partial rendering and existence checks', function (): void {
     $partial = fixturePath('partial/basic/card.antlers.html');
     $wrapper = fixturePath('partial/basic/wrapper.antlers.html');
@@ -72,6 +104,12 @@ it('supports partial shorthand methods and yield fallback content', function ():
     expect(engine()->renderFile($wrapper))->toBe('<header>Hello</header>|Fallback');
 });
 
+it('returns empty results for partial tags without usable paths', function (): void {
+    expect(engine()->render('{{ partial:exists }}'))->toBe('false')
+        ->and(engine()->render('{{ partial:if_exists }}fallback{{ /partial:if_exists }}'))->toBe('')
+        ->and(engine()->render('{{ partial src="   " }}fallback{{ /partial }}'))->toBe('');
+});
+
 it('supports partial slots and named slots', function (): void {
     $wrapper = fixturePath('partial/slots/wrapper.antlers.html');
 
@@ -83,6 +121,13 @@ it('supports layout rendering with template_content', function (): void {
     $child = fixturePath('layout/basic/child.antlers.html');
 
     expect(rtrim(engine()->renderFile($child, ['title' => 'Welcome'])))->toBe('<body><main>Welcome</main></body>');
+});
+
+it('supports layout path parameters and falls back to fragment rendering without a path', function (): void {
+    expect(rtrim(engine()->renderFile(fixturePath('layout/basic/child-path.antlers.html'), ['title' => 'Welcome'])))
+        ->toBe('<body><main>Welcome</main></body>')
+        ->and(engine()->render('{{ layout }}Hi {{ name }}{{ /layout }}', ['name' => 'Alice']))
+        ->toBe('Hi Alice');
 });
 
 it('supports sections inside layouts and passes layout parameters', function (): void {
@@ -137,6 +182,26 @@ it('supports section and yield tags', function (): void {
     expect(engine()->render($tpl, ['title' => 'Welcome']))->toBe("\n<h1>Welcome</h1>");
 });
 
+it('handles unnamed section, yield, slot, stack and push-style tags safely', function (): void {
+    $stringable = new class {
+        public function __toString(): string
+        {
+            return '**Stringable**';
+        }
+    };
+
+    expect(engine()->render('{{ section }}ignored{{ /section }}'))->toBe('')
+        ->and(engine()->render('{{ yield }}fallback{{ /yield }}|{{ yield }}{{ /yield }}'))->toBe('fallback|')
+        ->and(engine()->render('{{ stack }}fallback{{ /stack }}|{{ stack }}{{ /stack }}'))->toBe('fallback|')
+        ->and(engine()->render('{{ push }}ignored{{ /push }}{{ prepend }}ignored{{ /prepend }}'))->toBe('')
+        ->and(engine()->render('{{ slot:sidebar }}fallback{{ /slot:sidebar }}'))->toBe('fallback')
+        ->and(engine()->render('{{ slot }}fallback{{ /slot }}'))->toBe('fallback')
+        ->and(engine()->render('{{ slot:sidebar }}fallback{{ /slot:sidebar }}', ['__slots' => ['sidebar' => null]]))->toBe('fallback')
+        ->and(engine()->render('{{ markdown text=text }}', ['text' => $stringable]))->toBe('<p><strong>Stringable</strong></p>')
+        ->and(engine()->render('{{ markdown text=text }}', ['text' => new stdClass()]))->toBe('')
+        ->and(engine()->render('{{ markdown text=text }}', ['text' => null]))->toBe('');
+});
+
 it('supports push prepend and stack tags', function (): void {
     $tpl = <<<'ANTLERS'
     {{ push:scripts }}<script src="/app.js"></script>{{ /push:scripts }}
@@ -182,6 +247,22 @@ it('supports markdown tags', function (): void {
     expect(engine()->render($tpl))->toBe('<p><strong>Bold</strong></p>|<h1>Title</h1>');
 });
 
+it('supports markdown tag content parameters when no children are provided', function (): void {
+    expect(engine()->render('{{ markdown content="**Bold**" }}'))->toBe('<p><strong>Bold</strong></p>');
+});
+
+it('handles markdown indent blocks with blank lines and with no shared indentation', function (): void {
+    $tpl = '{{ markdown:indent }}
+        First
+
+        Second
+    {{ /markdown:indent }}|{{ markdown:indent }}
+No indent
+{{ /markdown:indent }}';
+
+    expect(engine()->render($tpl))->toBe('<p>First</p><p>Second</p>|<p>No indent</p>');
+});
+
 it('supports loop tag', function (): void {
     $tpl = '{{ loop times="3" }}{{ value }}{{ /loop }}';
 
@@ -192,6 +273,21 @@ it('supports loop shorthand count and start aliases', function (): void {
     $tpl = '{{ loop count="3" start="5" }}{{ value }}{{ /loop }}|{{ loop:2 }}{{ value }}{{ /loop:2 }}';
 
     expect(engine()->render($tpl))->toBe('567|12');
+});
+
+it('requires loop bounds and coerces numeric inputs from variables', function (): void {
+    expect(fn(): string => engine()->render('{{ loop }}{{ value }}{{ /loop }}'))
+        ->toThrow(AntlersRuntimeException::class, 'Loop tag requires "times" or "to".');
+
+    expect(engine()->render('{{ loop from=start to=end }}{{ value }}{{ /loop }}|{{ increment:row from=int_start by=int_step }},{{ increment:floaty from=float_start by=bool_step }},{{ increment:weird from=weird by=weird }}', [
+        'start'       => 2,
+        'end'         => 3,
+        'int_start'   => 4,
+        'int_step'    => 2,
+        'float_start' => 3.8,
+        'bool_step'   => true,
+        'weird'       => new stdClass(),
+    ]))->toBe('23|4,3,0');
 });
 
 it('supports switch tag', function (): void {
@@ -206,10 +302,21 @@ it('supports switch in alias and named sequences', function (): void {
     expect(engine()->render($tpl))->toBe('abxa');
 });
 
+it('returns empty for switch tags without values and supports array inputs', function (): void {
+    expect(engine()->render('{{ switch }}'))->toBe('')
+        ->and(engine()->render('{{ switch between=values }}{{ switch between=values }}', [
+            'values' => ['red', 'blue'],
+        ]))->toBe('redblue');
+});
+
 it('supports scope tag', function (): void {
     $tpl = '{{ scope:page }}{{ page:title }}{{ /scope:page }}';
 
     expect(engine()->render($tpl, ['title' => 'Homepage']))->toBe('Homepage');
+});
+
+it('returns empty for unnamed scope tags', function (): void {
+    expect(engine()->render('{{ scope }}{{ title }}{{ /scope }}', ['title' => 'Homepage']))->toBe('');
 });
 
 it('supports dump tag', function (): void {
@@ -225,6 +332,11 @@ it('supports svg tag', function (): void {
 
 it('supports svg name alias', function (): void {
     expect(engine()->renderFile(fixturePath('svg/name/template.antlers.html')))->toBe('<svg><circle r="4"/></svg>');
+});
+
+it('returns empty for svg tags without a path or with a missing file', function (): void {
+    expect(engine()->render('{{ svg }}'))->toBe('')
+        ->and(rtrim(engine()->renderFile(fixturePath('svg/src/missing.antlers.html'))))->toBe('');
 });
 
 it('blocks partial path traversal outside the current template root', function (): void {

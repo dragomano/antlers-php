@@ -51,6 +51,30 @@ it('calls a class-based tag', function (): void {
     expect($e->render('{{ hello }}'))->toBe('Hello from class tag!');
 });
 
+it('dispatches class-based tag methods and exposes abstract tag helpers', function (): void {
+    $e = engine();
+    $e->addTag('panel', new class extends AbstractTag {
+        public function index(): string
+        {
+            return $this->param('title', 'missing') . '|' . ($this->getBool('visible', true) ? 'yes' : 'no');
+        }
+
+        public function show(): string
+        {
+            return $this->param('title', 'missing')
+                . '|'
+                . $this->content(['title' => 'Inner content'])
+                . '|'
+                . ($this->getBool('visible', false) ? 'yes' : 'no')
+                . '|'
+                . ($this->getBool('missing', true) ? 'yes' : 'no');
+        }
+    });
+
+    expect($e->render('{{ panel title="Outer" visible=false }}'))->toBe('Outer|no')
+        ->and($e->render('{{ panel:show title="Outer" visible=1 }}{{ title }}{{ /panel:show }}'))->toBe('Outer|Inner content|yes|yes');
+});
+
 it('unknown tag returns empty string in lenient mode', function (): void {
     expect(engine()->render('{{ unknown_tag }}'))->toBe('');
 });

@@ -633,10 +633,6 @@ final class CoreTags
 
     private static function string(mixed $value): string
     {
-        if ($value === null) {
-            return '';
-        }
-
         if (is_scalar($value)) {
             return (string) $value;
         }

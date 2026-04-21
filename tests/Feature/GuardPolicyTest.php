@@ -5,6 +5,12 @@ declare(strict_types=1);
 use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\GuardPolicy;
 
+it('does not guard an empty variable path', function (): void {
+    expect((new GuardPolicy(
+        variables: ['user.password'],
+    ))->guardsVariable(''))->toBeFalse();
+});
+
 it('renders guarded variables as empty strings in lenient mode', function (): void {
     $engine = engine()->setGuardPolicy(new GuardPolicy(
         variables: ['user.password'],

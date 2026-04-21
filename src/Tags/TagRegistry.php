@@ -35,10 +35,6 @@ final class TagRegistry
         NodeProcessor $processor,
         array $children = [],
     ): mixed {
-        if (! isset($this->tags[$name])) {
-            return null;
-        }
-
         $handler = $this->tags[$name];
 
         if ($handler instanceof TagInterface) {

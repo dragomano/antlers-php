@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Exceptions\AntlersSyntaxException;
 use Bugo\Antlers\Parser\Lexer;
 use Bugo\Antlers\Parser\Token;
 use Bugo\Antlers\Parser\TokenType;
@@ -91,6 +92,10 @@ describe('Lexer', function (): void {
         expect($this->lexer->tokenize(';')[0]->type)->toBe(TokenType::Semicolon);
     });
 
+    it('tokenizes caret operator', function (): void {
+        expect($this->lexer->tokenize('^')[0]->type)->toBe(TokenType::Caret);
+    });
+
     it('tokenizes string literals', function (): void {
         $tokens = $this->lexer->tokenize('"hello world"');
         expect($tokens[0]->type)->toBe(TokenType::String)
@@ -103,6 +108,13 @@ describe('Lexer', function (): void {
             ->and($tokens[0]->value)->toBe('hello');
     });
 
+    it('tokenizes escaped characters inside strings', function (): void {
+        $tokens = $this->lexer->tokenize('"line\\ncol\\trow\\rpath\\\\"');
+
+        expect($tokens[0]->type)->toBe(TokenType::String)
+            ->and($tokens[0]->value)->toBe("line\ncol\trow\rpath\\");
+    });
+
     it('tokenizes integer numbers', function (): void {
         $tokens = $this->lexer->tokenize('42');
         expect($tokens[0]->type)->toBe(TokenType::Number)
@@ -113,6 +125,38 @@ describe('Lexer', function (): void {
         $tokens = $this->lexer->tokenize('3.14');
         expect($tokens[0]->type)->toBe(TokenType::Number)
             ->and($tokens[0]->value)->toBe('3.14');
+    });
+
+    it('treats minus as part of a number only in unary position', function (): void {
+        $negative = $this->lexer->tokenize('-42');
+        $binary   = $this->lexer->tokenize('value-1');
+        $paren    = $this->lexer->tokenize('(1)-2');
+        $bracket  = $this->lexer->tokenize('[1]-2');
+
+        expect($negative[0]->type)->toBe(TokenType::Number)
+            ->and($negative[0]->value)->toBe('-42')
+            ->and($binary[0]->type)->toBe(TokenType::Identifier)
+            ->and($binary[1]->type)->toBe(TokenType::Minus)
+            ->and($binary[2]->type)->toBe(TokenType::Number)
+            ->and($binary[2]->value)->toBe('1')
+            ->and($paren[2]->type)->toBe(TokenType::RParen)
+            ->and($paren[3]->type)->toBe(TokenType::Minus)
+            ->and($paren[4]->value)->toBe('2')
+            ->and($bracket[2]->type)->toBe(TokenType::RBracket)
+            ->and($bracket[3]->type)->toBe(TokenType::Minus)
+            ->and($bracket[4]->value)->toBe('2');
+    });
+
+    it('returns only EOF for whitespace-only input', function (): void {
+        $tokens = $this->lexer->tokenize(" \t\n ");
+
+        expect($tokens)->toHaveCount(1)
+            ->and($tokens[0]->type)->toBe(TokenType::Eof);
+    });
+
+    it('throws a syntax exception for unexpected characters', function (): void {
+        expect(fn() => $this->lexer->tokenize('@'))
+            ->toThrow(AntlersSyntaxException::class, "Unexpected character '@' at position 0 in: @");
     });
 
     it('always ends with EOF token', function (): void {

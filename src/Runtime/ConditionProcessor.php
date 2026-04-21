@@ -26,11 +26,10 @@ final readonly class ConditionProcessor
                 return $branch->children;
             }
 
-            if ($branch->condition === null) {
-                continue;
-            }
+            /** @var AbstractNode $condition */
+            $condition = $branch->condition;
 
-            $truthy = $this->evaluator->evaluateTruthy($branch->condition, $scope, $assignmentWriter);
+            $truthy = $this->evaluator->evaluateTruthy($condition, $scope, $assignmentWriter);
 
             // 'unless' inverts the condition
             if ($branch->type === 'unless') {

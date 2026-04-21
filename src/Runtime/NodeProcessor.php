@@ -276,13 +276,7 @@ final class NodeProcessor
             return '';
         }
 
-        $this->pushScope([]);
-
-        $output = $this->processNodes($children);
-
-        $this->popScope();
-
-        return $output;
+        return $this->renderChildrenWithScope([], $children);
     }
 
     /**
@@ -338,33 +332,7 @@ final class NodeProcessor
         $from = $this->toInt($this->evaluateNodeValue($node->from, $scope));
         $to   = $this->toInt($this->evaluateNodeValue($node->to, $scope));
 
-        $output = '';
-        $step   = $from <= $to ? 1 : -1;
-        $total  = abs($to - $from) + 1;
-        $index  = 0;
-
-        for ($i = $from; $step > 0 ? $i <= $to : $i >= $to; $i += $step) {
-            $index++;
-
-            $loopVars = [
-                'count' => $index,
-                'index' => $index - 1,
-                'total' => $total,
-                'first' => $index === 1,
-                'last'  => $index === $total,
-                'odd'   => $index % 2 !== 0,
-                'even'  => $index % 2 === 0,
-                'value' => $i,
-            ];
-
-            $this->pushScope($loopVars);
-
-            $output .= $this->processNodes($node->children);
-
-            $this->popScope();
-        }
-
-        return $output;
+        return $this->renderCounterRange($from, $to, $node->children);
     }
 
     /**
@@ -422,11 +390,7 @@ final class NodeProcessor
                 $loopVars[$keyAlias] = $key;
             }
 
-            $this->pushScope($loopVars);
-
-            $output .= $this->processNodes($children);
-
-            $this->popScope();
+            $output .= $this->renderChildrenWithScope($loopVars, $children);
         });
 
         return $output;
@@ -522,35 +486,17 @@ final class NodeProcessor
             }
 
             // Single associative item — render with merged scope
-            $this->pushScope($this->normalizeScopeFrame($items));
-
-            $output = $this->processNodes($children);
-
-            $this->popScope();
-
-            return $output;
+            return $this->renderChildrenWithScope($this->normalizeScopeFrame($items), $children);
         }
 
         $itemScope = $this->extractItemScope($value);
         if ($itemScope !== null && $itemScope !== []) {
-            $this->pushScope($itemScope);
-
-            $output = $this->processNodes($children);
-
-            $this->popScope();
-
-            return $output;
+            return $this->renderChildrenWithScope($itemScope, $children);
         }
 
         if ($this->evaluator->isTruthy($value)) {
             // Scalar or object — just render children with current scope
-            $this->pushScope([]);
-
-            $output = $this->processNodes($children);
-
-            $this->popScope();
-
-            return $output;
+            return $this->renderChildrenWithScope([], $children);
         }
 
         return '';
@@ -663,6 +609,14 @@ final class NodeProcessor
      */
     public function renderCounterLoop(int $from, int $to, array $children): string
     {
+        return $this->renderCounterRange($from, $to, $children);
+    }
+
+    /**
+     * @param AbstractNode[] $children
+     */
+    private function renderCounterRange(int $from, int $to, array $children): string
+    {
         $output = '';
         $step   = $from <= $to ? 1 : -1;
         $total  = abs($to - $from) + 1;
@@ -682,11 +636,7 @@ final class NodeProcessor
                 'value' => $i,
             ];
 
-            $this->pushScope($loopVars);
-
-            $output .= $this->processNodes($children);
-
-            $this->popScope();
+            $output .= $this->renderChildrenWithScope($loopVars, $children);
         }
 
         return $output;
@@ -887,11 +837,22 @@ final class NodeProcessor
      */
     private function currentScope(): array
     {
-        if ($this->scopeStack === []) {
-            return $this->globalData;
-        }
-
         return array_merge($this->globalData, ...$this->scopeStack);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param AbstractNode[] $children
+     */
+    private function renderChildrenWithScope(array $scope, array $children): string
+    {
+        $this->pushScope($scope);
+
+        try {
+            return $this->processNodes($children);
+        } finally {
+            $this->popScope();
+        }
     }
 
     /**
@@ -1250,10 +1211,6 @@ final class NodeProcessor
     private function resolvePathWithinRoot(string $root, string $path): ?string
     {
         $root = rtrim($root, DIRECTORY_SEPARATOR);
-        if ($root === '') {
-            return null;
-        }
-
         $rootReal = realpath($root);
         if ($rootReal === false) {
             return null;
@@ -1292,10 +1249,8 @@ final class NodeProcessor
         if (preg_match('/^[A-Za-z]:/', $path) === 1) {
             $prefix = substr($path, 0, 2);
             $path   = substr($path, 2);
-        } elseif (str_starts_with($path, '/')) {
-            $prefix = '';
         } else {
-            return null;
+            $prefix = '';
         }
 
         $segments = explode('/', ltrim($path, '/'));

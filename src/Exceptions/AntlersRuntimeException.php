@@ -6,4 +6,4 @@ namespace Bugo\Antlers\Exceptions;
 
 use RuntimeException;
 
-class AntlersRuntimeException extends RuntimeException {}
+final class AntlersRuntimeException extends RuntimeException {}

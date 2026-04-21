@@ -200,7 +200,7 @@ final class PathDataManager
      */
     private function resolveIndex(array $scope, string $index): int|string
     {
-        if (isset($scope[$index])) {
+        if (array_key_exists($index, $scope)) {
             return $this->indexKey($scope[$index]);
         }
 

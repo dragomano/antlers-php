@@ -78,8 +78,9 @@ final class LanguageParser
         // {{ foreach items as item }} / {{ foreach items as key => value }}
         // {{ foreach:items }} / {{ foreach array="items" }}
         if ($node->name === 'foreach') {
-            if ($this->isForeachLoopSyntax($raw)) {
-                return $this->parseForeachNode($node);
+            $foreachNode = $this->parseForeachNode($node);
+            if ($foreachNode instanceof LoopNode) {
+                return $foreachNode;
             }
 
             return $this->parseTagNode($node);
@@ -204,22 +205,18 @@ final class LanguageParser
         return $condition;
     }
 
-    private function parseForeachNode(AntlersNode $blockNode): LoopNode
+    private function parseForeachNode(AntlersNode $blockNode): ?LoopNode
     {
         // foreach items as item
         // foreach items as key => value
         $raw = trim(substr($blockNode->rawContent, strlen('foreach')));
-
-        // Extract "items as ..." part
-        if (! preg_match('/^(.+?)\s+as\s+(.+)$/i', $raw, $m)) {
-            throw new AntlersSyntaxException(
-                "Invalid foreach syntax: {{ $blockNode->rawContent }}",
-                $blockNode->line,
-            );
+        $parts = preg_split('/\s+as\s+/i', $raw, 2);
+        if (! is_array($parts) || count($parts) !== 2) {
+            return null;
         }
 
-        $iterableExpr = $this->parseExpression(trim($m[1]));
-        $aliasPart    = trim($m[2]);
+        $iterableExpr = $this->parseExpression(trim($parts[0]));
+        $aliasPart    = trim($parts[1]);
 
         $keyAlias = null;
         $alias    = $aliasPart;
@@ -323,9 +320,6 @@ final class LanguageParser
             // Skip whitespace
             while ($pos < $length && ctype_space($raw[$pos])) {
                 $pos++;
-            }
-            if ($pos >= $length) {
-                break;
             }
 
             // Read key
@@ -555,22 +549,21 @@ final class LanguageParser
 
     private function parseCollectionExpression(): AbstractNode
     {
-        $expr = $this->parseTernaryExpression();
-
+        $expr       = $this->parseTernaryExpression();
         $operations = [];
 
         while ($this->isCollectionOperator($this->peek())) {
+            /** @var 'merge'|'where'|'take'|'skip'|'pluck'|'orderby'|'groupby' $operator */
             $operator = strtolower($this->advance()->value);
 
             $operations[] = match ($operator) {
-                'merge'   => new CollectionOperatorNode($operator, [$this->parseTernaryExpression()]),
-                'where'   => $this->parseWhereCollectionOperator(),
                 'take',
                 'skip',
                 'pluck'   => new CollectionOperatorNode($operator, [$this->parseSingleCollectionArgument()]),
+                'merge'   => new CollectionOperatorNode($operator, [$this->parseTernaryExpression()]),
+                'where'   => $this->parseWhereCollectionOperator(),
                 'orderby' => $this->parseOrderByCollectionOperator(),
                 'groupby' => $this->parseGroupByCollectionOperator(),
-                default   => throw new AntlersSyntaxException("Unsupported collection operator: $operator"),
             };
         }
 
@@ -716,19 +709,6 @@ final class LanguageParser
                 $left  = new NullCoalesceNode($left, $right);
 
                 continue;
-            }
-
-            // Stop before pipe, question, colon, comma, semicolon, rparen, rbracket (handled elsewhere)
-            if ($op->is(
-                TokenType::Pipe,
-                TokenType::Question,
-                TokenType::Colon,
-                TokenType::Comma,
-                TokenType::Semicolon,
-                TokenType::RParen,
-                TokenType::RBracket,
-            )) {
-                break;
             }
 
             $this->advance();
@@ -1116,10 +1096,6 @@ final class LanguageParser
      */
     private function parseCollectionFieldAndTail(array $tokens): array
     {
-        if ($tokens === []) {
-            throw new AntlersSyntaxException('Expected collection operator argument');
-        }
-
         [$field, $consumed] = $this->parseLeadingExpressionFromTokens($tokens);
 
         $tail = array_slice($tokens, $consumed);
@@ -1133,10 +1109,6 @@ final class LanguageParser
      */
     private function parseCollectionFieldAndAlias(array $tokens): array
     {
-        if ($tokens === []) {
-            throw new AntlersSyntaxException('Expected groupby argument');
-        }
-
         [$field, $consumed] = $this->parseLeadingExpressionFromTokens($tokens);
 
         $tail = array_slice($tokens, $consumed);
@@ -1224,13 +1196,6 @@ final class LanguageParser
 
         // Identifier followed by key="value" param pattern
         return (bool) preg_match('/^\w+\s+(?::\$\w+|:?[\w-]+=)/', $raw);
-    }
-
-    private function isForeachLoopSyntax(string $raw): bool
-    {
-        $payload = trim(substr($raw, strlen('foreach')));
-
-        return $payload !== '' && preg_match('/^(.+?)\s+as\s+(.+)$/i', $payload) === 1;
     }
 
     private function parseDynamicParameterValue(string $value): AbstractNode

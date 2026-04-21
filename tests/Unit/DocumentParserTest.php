@@ -80,6 +80,18 @@ describe('DocumentParser', function (): void {
         expect($content)->toContain('{{ raw }}');
     });
 
+    it('ignores empty antlers blocks', function (): void {
+        expect($this->parser->parse('{{   }}'))->toBe([]);
+    });
+
+    it('ignores orphaned closing tags at the root level', function (): void {
+        $nodes = $this->parser->parse('{{ /if }}Hello');
+
+        expect($nodes)->toHaveCount(1)
+            ->and($nodes[0])->toBeInstanceOf(LiteralNode::class)
+            ->and($nodes[0]->content)->toBe('Hello');
+    });
+
     it('throws a syntax exception for an unclosed antlers tag with the source line', function (): void {
         try {
             $this->parser->parse("Before\n{{ name");
@@ -100,13 +112,43 @@ describe('DocumentParser', function (): void {
         }
     });
 
+    it('throws a syntax exception for unclosed escaped antlers with the source line', function (): void {
+        try {
+            $this->parser->parse("Before\n@{{ raw");
+            $this->fail('Expected AntlersSyntaxException was not thrown.');
+        } catch (AntlersSyntaxException $e) {
+            expect($e->getMessage())->toBe('Unclosed escaped antlers @{{')
+                ->and($e->templateLine)->toBe(2);
+        }
+    });
+
     it('throws a syntax exception for an unclosed noparse block with the opening line', function (): void {
         try {
-            $this->parser->parse("Before\n{{ noparse }}{{ name }}");
+            $this->parser->parse("Before\n{{ noparse }}raw text");
             $this->fail('Expected AntlersSyntaxException was not thrown.');
         } catch (AntlersSyntaxException $e) {
             expect($e->getMessage())->toBe('Unclosed noparse block {{ noparse }}')
                 ->and($e->templateLine)->toBe(2);
+        }
+    });
+
+    it('throws a syntax exception when a nested tag inside noparse is missing its closing delimiter', function (): void {
+        try {
+            $this->parser->parse('{{ noparse }}before {{ name');
+            $this->fail('Expected AntlersSyntaxException was not thrown.');
+        } catch (AntlersSyntaxException $e) {
+            expect($e->getMessage())->toBe('Unclosed Antlers tag {{')
+                ->and($e->templateLine)->toBe(1);
+        }
+    });
+
+    it('throws a syntax exception when noparse reaches end of template after a nested tag', function (): void {
+        try {
+            $this->parser->parse('{{ noparse }}{{ name }}');
+            $this->fail('Expected AntlersSyntaxException was not thrown.');
+        } catch (AntlersSyntaxException $e) {
+            expect($e->getMessage())->toBe('Unclosed noparse block {{ noparse }}')
+                ->and($e->templateLine)->toBe(1);
         }
     });
 });
