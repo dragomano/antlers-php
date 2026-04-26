@@ -2,7 +2,7 @@
 
 ![PHP](https://img.shields.io/badge/PHP-^8.2-blue.svg?style=flat)
 
-Автономная реализация движка шаблонов [Antlers](https://statamic.dev/frontend/antlers) — альтернативная имплементация для использования **вне экосистемы Statamic/Laravel** в любом PHP 8.2+ проекте.
+Автономная реализация движка шаблонов [Antlers](https://statamic.dev/frontend/antlers) — для использования **вне экосистемы Statamic/Laravel** в любом PHP 8.2+ проекте.
 
 [English](README.md)
 
@@ -244,7 +244,6 @@ echo $engine->render('Привет, {{ name }}!', ['name' => 'мир']);
 | Статус | Модификаторы |
 |--------|--------------|
 | Поддерживаемый официальный поднабор | `add`, `ceil`, `chunk`, `contains`, `count`, `decode`, `divide`, `ends_with`, `entities`, `explode`, `first`, `flatten`, `floor`, `format`, `is_array`, `is_empty`, `is_numeric`, `join`, `kebab`, `keys`, `last`, `lcfirst`, `length`, `limit`, `lower`, `markdown`, `md5`, `mod`, `multiply`, `nl2br`, `pad`, `pluck`, `regex_replace`, `repeat`, `replace`, `reverse`, `round`, `sanitize`, `slugify`, `snake`, `sort`, `starts_with`, `strip_tags`, `studly`, `subtract`, `surround`, `title`, `trim`, `truncate`, `ucfirst`, `unique`, `upper`, `values`, `where`, `word_count`, `wrap` |
-| Пока не включены | `add_slashes`, `ampersand_list`, `antlers`, `as`, `ascii`, `at`, `attribute`, `background_position`, `bard_html`, `bard_items`, `bard_text`, `bool_string`, `camelize`, `cdata`, `classes`, `collapse`, `collapse_whitespace`, `compact`, `console_log`, `contains_all`, `contains_any`, `count_substring`, `dashify`, `days_ago`, `deslugify`, `dl`, `dump`, `embed_url`, `ensure_left`, `ensure_right`, `excerpt`, `favicon`, `filter_empty`, `flip`, `format_number`, `format_translated`, `full_urls`, `get`, `gravatar`, `group_by`, `has_lower_case`, `has_upper_case`, `headline`, `hex_to_rgb`, `hours_ago`, `image`, `in_array`, `insert`, `is_after`, `is_alpha`, `is_alphanumeric`, `is_before`, `is_between`, `is_blank`, `is_email`, `is_embeddable`, `is_external_url`, `is_future`, `is_json`, `is_leap_year`, `is_lowercase`, `is_numberwang`, `is_past`, `is_today`, `is_tomorrow`, `is_uppercase`, `is_url`, `is_weekday`, `is_weekend`, `is_yesterday`, `iso_format`, `link`, `list`, `macro`, `mailto`, `mark`, `minutes_ago`, `modify_date`, `months_ago`, `obfuscate`, `obfuscate_email`, `offset`, `ol`, `option_list`, `output`, `parse_url`, `partial`, `pathinfo`, `piped`, `plural`, `random`, `raw`, `rawurlencode`, `rawurlencode_except_slashes`, `ray`, `read_time`, `regex_mark`, `relative`, `remove_left`, `remove_right`, `safe_truncate`, `seconds_ago`, `segment`, `select`, `sentence_list`, `shuffle`, `singular`, `smartypants`, `spaceless`, `str_pad_left`, `substr`, `sum`, `swap_case`, `table`, `tidy`, `timezone`, `to_json`, `to_qs`, `to_spaces`, `to_tabs`, `ul`, `underscored`, `url`, `urlencode`, `urlencode_except_slashes`, `where-in`, `weeks_ago`, `widont`, `years_ago` |
 
 ### Спорные модификаторы Statamic
 
