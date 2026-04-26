@@ -185,6 +185,7 @@ final class LanguageParser
 
                     continue;
                 }
+
                 if ($childName === 'else') {
                     $pendingBranch->children = $current;
                     $condition->branches[]   = $pendingBranch;
@@ -242,7 +243,7 @@ final class LanguageParser
 
         if (! preg_match('/^(.+?)\s+to\s+(.+)$/i', $raw, $m)) {
             throw new AntlersSyntaxException(
-                "Invalid for syntax: {{ $blockNode->rawContent }}",
+                sprintf('Invalid for syntax: {{ %s }}', $blockNode->rawContent),
                 $blockNode->line,
             );
         }
@@ -264,7 +265,7 @@ final class LanguageParser
         $eqPos   = strpos($content, '=');
 
         if ($eqPos === false) {
-            throw new AntlersSyntaxException("Invalid set syntax: {{ $raw }}");
+            throw new AntlersSyntaxException(sprintf('Invalid set syntax: {{ %s }}', $raw));
         }
 
         $varName  = trim(substr($content, 0, $eqPos));
@@ -356,6 +357,7 @@ final class LanguageParser
             if ($key === '') {
                 break;
             }
+
             if ($isDynamic) {
                 $key = ltrim($key, ':');
             }
@@ -474,7 +476,7 @@ final class LanguageParser
         if (! $token->is($terminator, TokenType::Eof)) {
 
             throw new AntlersSyntaxException(
-                "Unexpected token {$token->type->value} ('$token->value') in expression",
+                sprintf("Unexpected token %s ('%s') in expression", $token->type->value, $token->value),
             );
         }
 
@@ -553,17 +555,16 @@ final class LanguageParser
         $operations = [];
 
         while ($this->isCollectionOperator($this->peek())) {
-            /** @var 'merge'|'where'|'take'|'skip'|'pluck'|'orderby'|'groupby' $operator */
-            $operator = strtolower($this->advance()->value);
+            $operator = CollectionOperator::from(strtolower($this->advance()->value));
 
             $operations[] = match ($operator) {
-                'take',
-                'skip',
-                'pluck'   => new CollectionOperatorNode($operator, [$this->parseSingleCollectionArgument()]),
-                'merge'   => new CollectionOperatorNode($operator, [$this->parseTernaryExpression()]),
-                'where'   => $this->parseWhereCollectionOperator(),
-                'orderby' => $this->parseOrderByCollectionOperator(),
-                'groupby' => $this->parseGroupByCollectionOperator(),
+                CollectionOperator::Take,
+                CollectionOperator::Skip,
+                CollectionOperator::Pluck   => new CollectionOperatorNode($operator->value, [$this->parseSingleCollectionArgument()]),
+                CollectionOperator::Merge   => new CollectionOperatorNode($operator->value, [$this->parseTernaryExpression()]),
+                CollectionOperator::Where   => $this->parseWhereCollectionOperator(),
+                CollectionOperator::OrderBy => $this->parseOrderByCollectionOperator(),
+                CollectionOperator::GroupBy => $this->parseGroupByCollectionOperator(),
             };
         }
 
@@ -702,16 +703,15 @@ final class LanguageParser
             }
 
             // Null coalesce — right-associative
+            $this->advance();
+
             if ($op->is(TokenType::QQ)) {
-                $this->advance();
 
                 $right = $this->parseExpr($bp - 1);
                 $left  = new NullCoalesceNode($left, $right);
 
                 continue;
             }
-
-            $this->advance();
 
             $right = $this->parseExpr($bp);
             $left  = new BinaryOpNode($left, $op->value, $right);
@@ -784,6 +784,7 @@ final class LanguageParser
 
             return new BooleanNode(true);
         }
+
         if ($token->is(TokenType::False)) {
             $this->advance();
 
@@ -814,7 +815,7 @@ final class LanguageParser
 
         // Unexpected
         throw new AntlersSyntaxException(
-            "Unexpected token $token in expression",
+            sprintf('Unexpected token %s in expression', $token),
         );
     }
 
@@ -891,7 +892,7 @@ final class LanguageParser
 
             if (! $next->is(TokenType::Identifier)) {
                 throw new AntlersSyntaxException(
-                    "Expected identifier after {$separator->type->value} in variable path",
+                    sprintf('Expected identifier after %s in variable path', $separator->type->value),
                 );
             }
 
@@ -941,16 +942,7 @@ final class LanguageParser
 
     private function isCollectionOperator(Token $token): bool
     {
-        return $token->is(TokenType::Identifier)
-            && in_array(strtolower($token->value), [
-                'merge',
-                'where',
-                'take',
-                'skip',
-                'pluck',
-                'orderby',
-                'groupby',
-            ], true);
+        return CollectionOperator::tryFromToken($token) instanceof CollectionOperator;
     }
 
     private function parseWhereCollectionOperator(): CollectionOperatorNode
@@ -1174,7 +1166,7 @@ final class LanguageParser
         }
 
         throw new AntlersSyntaxException(
-            "Expected modifier name but got {$token->type->value} ('$token->value')",
+            sprintf("Expected modifier name but got %s ('%s')", $token->type->value, $token->value),
         );
     }
 
@@ -1266,8 +1258,7 @@ final class LanguageParser
     {
         return match (true) {
             $token->is(TokenType::QQ) => 1,  // ??  right-assoc
-            $token->is(TokenType::Or) => 2,  // ||
-            $token->is(TokenType::Xor) => 2,  // xor
+            $token->is(TokenType::Or, TokenType::Xor) => 2,  // ||, xor
             $token->is(TokenType::And) => 3,  // &&
             $token->is(
                 TokenType::Spaceship,
@@ -1303,7 +1294,7 @@ final class LanguageParser
             TokenType::StarEquals => '*',
             TokenType::SlashEquals => '/',
             TokenType::PercentEquals => '%',
-            default => throw new AntlersSyntaxException("Unsupported assignment operator: {$token->value}"),
+            default => throw new AntlersSyntaxException('Unsupported assignment operator: ' . $token->value),
         };
     }
 
@@ -1326,7 +1317,7 @@ final class LanguageParser
         $token = $this->peek();
         if (! $token->is($type)) {
             throw new AntlersSyntaxException(
-                "Expected $type->value but got {$token->type->value} ('$token->value')",
+                sprintf("Expected %s but got %s ('%s')", $type->value, $token->type->value, $token->value),
             );
         }
 

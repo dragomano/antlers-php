@@ -8,6 +8,7 @@ use Bugo\Antlers\Tags\AbstractTag;
 it('calls a simple callable tag', function (): void {
     $e = engine();
     $e->addTag('greet', fn($params): string => 'Hello, ' . ($params['name'] ?? 'World') . '!');
+
     expect($e->render('{{ greet name="Alice" }}'))->toBe('Hello, Alice!');
 });
 
@@ -35,7 +36,7 @@ it('calls a paired tag with children', function (): void {
         $tag     = $params['tag'] ?? 'div';
         $content = $proc->reduce($children, $data);
 
-        return "<$tag>$content</$tag>";
+        return sprintf('<%s>%s</%s>', $tag, $content, $tag);
     });
     expect($e->render('{{ wrap tag="p" }}Hello{{ /wrap }}'))->toBe('<p>Hello</p>');
 });
@@ -65,14 +66,15 @@ it('dispatches class-based tag methods and exposes abstract tag helpers', functi
                 . '|'
                 . $this->content(['title' => 'Inner content'])
                 . '|'
-                . ($this->getBool('visible', false) ? 'yes' : 'no')
+                . ($this->getBool('visible') ? 'yes' : 'no')
                 . '|'
                 . ($this->getBool('missing', true) ? 'yes' : 'no');
         }
     });
 
     expect($e->render('{{ panel title="Outer" visible=false }}'))->toBe('Outer|no')
-        ->and($e->render('{{ panel:show title="Outer" visible=1 }}{{ title }}{{ /panel:show }}'))->toBe('Outer|Inner content|yes|yes');
+        ->and($e->render('{{ panel:show title="Outer" visible=1 }}{{ title }}{{ /panel:show }}'))
+        ->toBe('Outer|Inner content|yes|yes');
 });
 
 it('unknown tag returns empty string in lenient mode', function (): void {

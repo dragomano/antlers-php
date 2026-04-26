@@ -26,7 +26,7 @@ final readonly class ModifierRunner
     {
         if ($this->options->guardPolicy->guardsModifier($name)) {
             if ($this->options->strict) {
-                throw new AntlersRuntimeException("Guarded modifier: \"$name\"");
+                throw new AntlersRuntimeException(sprintf('Guarded modifier: "%s"', $name));
             }
 
             return $value;

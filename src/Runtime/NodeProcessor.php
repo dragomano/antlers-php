@@ -420,7 +420,7 @@ final class NodeProcessor
     {
         if (! $this->tags->has($node->name)) {
             if ($this->options->strict) {
-                throw new AntlersRuntimeException("Unknown tag: \"$node->name\"");
+                throw new AntlersRuntimeException(sprintf('Unknown tag: "%s"', $node->name));
             }
 
             return '';
@@ -428,7 +428,7 @@ final class NodeProcessor
 
         if ($this->options->guardPolicy->guardsTag($node->name)) {
             if ($this->options->strict) {
-                throw new AntlersRuntimeException("Guarded tag: \"$node->name\"");
+                throw new AntlersRuntimeException(sprintf('Guarded tag: "%s"', $node->name));
             }
 
             return '';
@@ -519,15 +519,15 @@ final class NodeProcessor
     {
         $resolved = $this->resolveTemplatePath($path);
         if ($resolved === '') {
-            throw new AntlersRuntimeException("Template file is outside the configured template roots: $path");
+            throw new AntlersRuntimeException('Template file is outside the configured template roots: ' . $path);
         }
 
         if (! is_file($resolved)) {
-            throw new AntlersRuntimeException("Template file not found: $resolved");
+            throw new AntlersRuntimeException('Template file not found: ' . $resolved);
         }
 
         if (in_array($resolved, $this->templateRenderStack, true)) {
-            throw new AntlersRuntimeException("Recursive template rendering detected: $resolved");
+            throw new AntlersRuntimeException('Recursive template rendering detected: ' . $resolved);
         }
 
         $this->templateRenderStack[] = $resolved;
@@ -548,7 +548,7 @@ final class NodeProcessor
     {
         $resolved = $this->resolveViewPath($name);
         if (! is_file($resolved)) {
-            throw new AntlersRuntimeException("Template view not found: $name");
+            throw new AntlersRuntimeException('Template view not found: ' . $name);
         }
 
         return $this->renderTemplateFile($resolved, $data);
@@ -768,19 +768,7 @@ final class NodeProcessor
      */
     public function resolvePathValue(string $path, array $scope): mixed
     {
-        if ($this->options->guardPolicy->guardsVariable($path)) {
-            if ($this->options->strict) {
-                throw new AntlersRuntimeException("Guarded variable: \"$path\"");
-            }
-
-            return null;
-        }
-
-        if ($this->options->strict && ! $this->paths->has($path, $scope)) {
-            throw new AntlersRuntimeException("Undefined variable: \"$path\"");
-        }
-
-        return $this->paths->get($path, $scope);
+        return $this->evaluator->resolveVariable($path, $scope);
     }
 
     /**

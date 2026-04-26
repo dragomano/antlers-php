@@ -45,7 +45,7 @@ it('supports where arrow functions from official antlers syntax', function (): v
 });
 
 it('supports skip and pluck as standalone collection operators', function (): void {
-    expect(engineWithCollectionJson()->render('{{ items skip (1) pluck (\'name\') | to_json }}', [
+    expect(engineWithCollectionJson()->render("{{ items skip (1) pluck ('name') | to_json }}", [
         'items' => [
             ['name' => 'Alice'],
             ['name' => 'Bob'],

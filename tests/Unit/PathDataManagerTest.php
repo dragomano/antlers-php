@@ -38,6 +38,7 @@ describe('PathDataManager', function (): void {
     it('accesses object property', function (): void {
         $obj       = new stdClass();
         $obj->name = 'Charlie';
+
         expect($this->pathDataManager->get('person.name', ['person' => $obj]))->toBe('Charlie');
     });
 

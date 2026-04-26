@@ -135,14 +135,16 @@ it('processes set, sequence, raw antlers and loop node edge cases', function ():
 
 it('handles paired values, null tag results and raw noparse children', function (): void {
     $processor            = nodeProcessor();
-    $processorWithNullTag = nodeProcessorWithTag('nuller', fn(): mixed => null);
+    $processorWithNullTag = nodeProcessorWithTag('nuller', fn(): null => null);
 
     $nullTag              = new TagNode('nuller');
     $noparse              = new AntlersNode();
     $noparse->name        = 'noparse';
+
     $rawChild             = new AntlersNode();
     $rawChild->rawContent = 'name';
     $rawChild->name       = 'name';
+
     $noparse->children    = [
         new LiteralNode('Hi '),
         $rawChild,
@@ -176,13 +178,13 @@ it('supports sections, stacks, slots, once and helper loops', function (): void 
     expect($processor->yieldSection('missing'))->toBe('')
         ->and($processor->yieldSection('hero'))->toBe('AB')
         ->and($processor->yieldStack('scripts'))->toBe('BA')
-        ->and($processor->renderSlots([$slotTag], []))->toBe([
+        ->and($processor->renderSlots([$slotTag]))->toBe([
             'default' => '',
             'named'   => ['sidebar' => 'Inner'],
         ])
         ->and($processor->renderSlots([
             new TagNode('slot', 'index', [], [new LiteralNode('Fallback')], true),
-        ], []))->toBe([
+        ]))->toBe([
             'default' => '',
             'named'   => ['default' => 'Fallback'],
         ])
@@ -228,10 +230,9 @@ it('handles render file and view fallbacks, globals and strict path resolution',
     $withViews = nodeProcessor();
     $withViews->setViewPaths(renderViewFixturePath('views'));
 
-    expect($withViews->renderView('pages/home', ['title' => 'Welcome']))->toBe("Home: Welcome\n");
-    expect($withViews->resolveTemplatePath('C:\\templates\\home.antlers.html'))->toBe('');
-
-    expect(fn(): string => nodeProcessor()->renderView('missing-view'))
+    expect($withViews->renderView('pages/home', ['title' => 'Welcome']))->toBe("Home: Welcome\n")
+        ->and($withViews->resolveTemplatePath('C:\\templates\\home.antlers.html'))->toBe('')
+        ->and(fn(): string => nodeProcessor()->renderView('missing-view'))
         ->toThrow(AntlersRuntimeException::class, 'Template view not found');
 });
 

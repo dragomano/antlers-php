@@ -85,18 +85,18 @@ final readonly class ExpressionEvaluator
     /**
      * @param array<string, mixed> $scope
      */
-    private function resolveVariable(string $path, array $scope): mixed
+    public function resolveVariable(string $path, array $scope): mixed
     {
         if ($this->options->guardPolicy->guardsVariable($path)) {
             if ($this->options->strict) {
-                throw new AntlersRuntimeException("Guarded variable: \"$path\"");
+                throw new AntlersRuntimeException(sprintf('Guarded variable: "%s"', $path));
             }
 
             return null;
         }
 
         if ($this->options->strict && ! $this->paths->has($path, $scope)) {
-            throw new AntlersRuntimeException("Undefined variable: \"$path\"");
+            throw new AntlersRuntimeException(sprintf('Undefined variable: "%s"', $path));
         }
 
         return $this->paths->get($path, $scope);
@@ -171,7 +171,7 @@ final readonly class ExpressionEvaluator
             '%'     => $rightNumeric != 0
                         ? fmod((float) $leftNumeric, (float) $rightNumeric)
                         : throw new AntlersRuntimeException('Modulo by zero'),
-            '**'    => $this->power((float) $leftNumeric, (float) $rightNumeric),
+            '**',
             '^'     => $this->power((float) $leftNumeric, (float) $rightNumeric),
             '.'     => $this->stringify($left->value) . $this->stringify($right->value),
             '<=>'   => $this->compareSortValues($left->value, $right->value),
@@ -183,7 +183,7 @@ final readonly class ExpressionEvaluator
             '>'     => $left->value > $right->value,
             '<='    => $left->value <= $right->value,
             '>='    => $left->value >= $right->value,
-            default => throw new AntlersRuntimeException("Unknown binary operator: $op"),
+            default => throw new AntlersRuntimeException('Unknown binary operator: ' . $op),
         };
     }
 
@@ -209,7 +209,7 @@ final readonly class ExpressionEvaluator
         return match ($node->operator) {
             '!', 'not' => ! $this->isTruthy($value->value),
             '-'        => -$this->coerceNumeric($value->value),
-            default    => throw new AntlersRuntimeException("Unknown unary operator: $node->operator"),
+            default    => throw new AntlersRuntimeException('Unknown unary operator: ' . $node->operator),
         };
     }
 
@@ -348,7 +348,7 @@ final readonly class ExpressionEvaluator
             return false;
         }
 
-        return ! (is_array($value) && count($value) === 0);
+        return $value !== [];
     }
 
     public function stringify(mixed $value): string
@@ -423,7 +423,7 @@ final readonly class ExpressionEvaluator
             'pluck'   => $this->applyPluckOperator($value, $operator, $scope, $assignmentWriter),
             'orderby' => $this->applyOrderByOperator($value, $operator, $scope, $assignmentWriter),
             'groupby' => $this->applyGroupByOperator($value, $operator, $scope, $assignmentWriter),
-            default   => throw new AntlersRuntimeException("Unknown collection operator: $operator->name"),
+            default   => throw new AntlersRuntimeException('Unknown collection operator: ' . $operator->name),
         };
     }
 
@@ -795,7 +795,7 @@ final readonly class ExpressionEvaluator
         }
 
         throw new AntlersRuntimeException(
-            "Collection operator \"$operator->name\" expects an expression argument",
+            sprintf('Collection operator "%s" expects an expression argument', $operator->name),
         );
     }
 }

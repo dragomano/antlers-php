@@ -74,10 +74,10 @@ it('supports colon notation for variables', function (): void {
 
 it('provides next and previous values in paired array loops', function (): void {
     $tpl = '{{ songs }}{{ value }}(N:{{ next:value }}|P:{{ prev:value }}){{ /songs }}';
-    $data = ['songs' => ['Brand New Funk', 'Parents Just Don\'t Understand', 'Summertime']];
+    $data = ['songs' => ['Brand New Funk', "Parents Just Don't Understand", 'Summertime']];
 
     expect(engine()->render($tpl, $data))
-        ->toBe('Brand New Funk(N:Parents Just Don\'t Understand|P:)Parents Just Don\'t Understand(N:Summertime|P:Brand New Funk)Summertime(N:|P:Parents Just Don\'t Understand)');
+        ->toBe("Brand New Funk(N:Parents Just Don't Understand|P:)Parents Just Don't Understand(N:Summertime|P:Brand New Funk)Summertime(N:|P:Parents Just Don't Understand)");
 });
 
 it('provides next and previous nested fields for array items in paired loops', function (): void {

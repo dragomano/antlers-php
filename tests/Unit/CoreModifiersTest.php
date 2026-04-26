@@ -68,7 +68,7 @@ it('registers the standalone mandatory modifiers from the spec', function (): vo
     ];
 
     foreach ($requiredModifiers as $modifier) {
-        expect($registry->has($modifier))->toBeTrue("Modifier [$modifier] should be registered.");
+        expect($registry->has($modifier))->toBeTrue(sprintf('Modifier [%s] should be registered.', $modifier));
     }
 });
 
@@ -173,7 +173,7 @@ it('keeps unique object instances by identity', function (): void {
 it('applies registered modifier interface implementations', function (): void {
     $registry = new ModifierRegistry();
     $registry->register('suffix', new class implements ModifierInterface {
-        public function modify(mixed $value, array $params, array $context): mixed
+        public function modify(mixed $value, array $params, array $context): string
         {
             return $value . ($params[0] ?? '') . ($context['tail'] ?? '');
         }

@@ -204,7 +204,7 @@ final class Lexer
                 ':'     => $this->add(TokenType::Colon, ':'),
                 '.'     => $this->add(TokenType::Dot, '.'),
                 default => throw new AntlersSyntaxException(
-                    "Unexpected character '$ch' at position $this->pos in: $this->input",
+                    sprintf("Unexpected character '%s' at position %d in: %s", $ch, $this->pos, $this->input),
                 ),
             };
         }

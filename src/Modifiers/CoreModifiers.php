@@ -134,7 +134,7 @@ final class CoreModifiers
         $registry->register('wrap', static function (mixed $v, array $p): string {
             $tag = self::string($p[0] ?? 'span');
 
-            return "<$tag>" . self::string($v) . "</$tag>";
+            return sprintf('<%s>', $tag) . self::string($v) . sprintf('</%s>', $tag);
         });
 
         $registry->register('surround', static function (mixed $v, array $p): string {

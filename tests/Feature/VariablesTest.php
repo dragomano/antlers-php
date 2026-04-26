@@ -127,12 +127,14 @@ it('supports noparse blocks adjacent to rendered tags', function (): void {
 it('renders global data', function (): void {
     $e = engine();
     $e->setGlobals(['site' => 'My Blog']);
+
     expect($e->render('{{ site }}'))->toBe('My Blog');
 });
 
 it('merges global and local data with local taking precedence', function (): void {
     $e = engine();
     $e->addGlobal('greeting', 'Hello');
+
     expect($e->render('{{ greeting }}, {{ name }}!', ['name' => 'World']))->toBe('Hello, World!');
 });
 

@@ -21,6 +21,6 @@ final readonly class Token implements Stringable
 
     public function __toString(): string
     {
-        return "[{$this->type->value}:$this->value]";
+        return sprintf('[%s:%s]', $this->type->value, $this->value);
     }
 }

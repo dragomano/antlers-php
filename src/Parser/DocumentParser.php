@@ -16,8 +16,11 @@ use Bugo\Antlers\Nodes\LiteralNode;
 final class DocumentParser
 {
     private string $template = '';
+
     private int $length = 0;
+
     private int $pos = 0;
+
     private int $line = 1;
 
     /** @var AbstractNode[] */
@@ -102,8 +105,10 @@ final class DocumentParser
             // Antlers block: {{ ... }}
             if ($this->matchAt('{{')) {
                 $noparseOpenEnd = $this->findNoparseOpenEnd();
+
+                $this->flushLiteral($literalStart, $this->pos);
+
                 if ($noparseOpenEnd !== null) {
-                    $this->flushLiteral($literalStart, $this->pos);
 
                     $this->nodes[] = $this->readNoparseBlock($noparseOpenEnd);
 
@@ -111,8 +116,6 @@ final class DocumentParser
 
                     continue;
                 }
-
-                $this->flushLiteral($literalStart, $this->pos);
 
                 $this->pos += 2;
 
