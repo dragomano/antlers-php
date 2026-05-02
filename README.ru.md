@@ -1,6 +1,7 @@
 # Antlers PHP
 
 ![PHP](https://img.shields.io/badge/PHP-^8.2-blue.svg?style=flat)
+[![Coverage Status](https://coveralls.io/repos/github/dragomano/antlers-php/badge.svg?branch=main)](https://coveralls.io/github/dragomano/antlers-php?branch=main)
 
 Автономная реализация движка шаблонов [Antlers](https://statamic.dev/frontend/antlers) — для использования **вне экосистемы Statamic/Laravel** в любом PHP 8.2+ проекте.
 

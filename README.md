@@ -1,6 +1,7 @@
 # Antlers PHP
 
 ![PHP](https://img.shields.io/badge/PHP-^8.2-blue.svg?style=flat)
+[![Coverage Status](https://coveralls.io/repos/github/dragomano/antlers-php/badge.svg?branch=main)](https://coveralls.io/github/dragomano/antlers-php?branch=main)
 
 A standalone implementation of the [Antlers](https://statamic.dev/frontend/antlers) templating engine, designed for use outside the Statamic/Laravel ecosystem in any PHP 8.2+ project.
 
