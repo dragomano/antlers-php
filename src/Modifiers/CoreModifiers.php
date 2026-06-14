@@ -157,10 +157,10 @@ final class CoreModifiers
         $registry->register('multiply', static fn(mixed $v, array $p): float
             => self::float($v) * self::float($p[0] ?? 1));
 
-        $registry->register('divide', static function (mixed $v, array $p): float|int {
+        $registry->register('divide', static function (mixed $v, array $p): float {
             $divisor = self::float($p[0] ?? 1);
 
-            return $divisor !== 0.0 ? self::float($v) / $divisor : 0;
+            return $divisor !== 0.0 ? self::float($v) / $divisor : 0.0;
         });
 
         $registry->register('mod', static fn(mixed $v, array $p): int

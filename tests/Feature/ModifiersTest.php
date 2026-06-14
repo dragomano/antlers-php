@@ -249,7 +249,9 @@ it('applies multiply modifier', function (): void {
 
 it('applies divide modifier', function (): void {
     expect(engine()->render('{{ price | divide:2 }}', ['price' => 8]))
-        ->toBe('4');
+        ->toBe('4')
+        ->and(engine()->render('{{ price | divide:0 }}', ['price' => 8]))
+        ->toBe('0');
 });
 
 it('applies mod modifier', function (): void {
