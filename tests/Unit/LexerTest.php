@@ -163,4 +163,32 @@ describe('Lexer', function (): void {
         $tokens = $this->lexer->tokenize('name');
         expect(end($tokens)->type)->toBe(TokenType::Eof);
     });
+
+    it('throws a syntax exception for unterminated double-quoted string', function (): void {
+        expect(fn() => $this->lexer->tokenize('"hello'))
+            ->toThrow(AntlersSyntaxException::class, 'Unterminated string starting at position 0');
+    });
+
+    it('throws a syntax exception for unterminated single-quoted string', function (): void {
+        expect(fn() => $this->lexer->tokenize("'world"))
+            ->toThrow(AntlersSyntaxException::class, 'Unterminated string starting at position 0');
+    });
+
+    it('tokenizes escaped double quotes inside double-quoted string', function (): void {
+        $tokens = $this->lexer->tokenize('"say \\"hello\\""');
+        expect($tokens[0]->type)->toBe(TokenType::String)
+            ->and($tokens[0]->value)->toBe('say "hello"');
+    });
+
+    it('tokenizes escaped single quotes inside single-quoted string', function (): void {
+        $tokens = $this->lexer->tokenize("'it\\'s a test'");
+        expect($tokens[0]->type)->toBe(TokenType::String)
+            ->and($tokens[0]->value)->toBe("it's a test");
+    });
+
+    it('tokenizes null byte escape in string', function (): void {
+        $tokens = $this->lexer->tokenize('"a\\0b"');
+        expect($tokens[0]->type)->toBe(TokenType::String)
+            ->and($tokens[0]->value)->toBe("a\0b");
+    });
 });

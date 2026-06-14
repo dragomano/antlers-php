@@ -259,7 +259,8 @@ final class Lexer
 
         $this->pos++; // skip opening quote
 
-        $value = '';
+        $value  = '';
+        $closed = false;
 
         while ($this->pos < $this->length) {
             $ch = $this->input[$this->pos];
@@ -272,6 +273,9 @@ final class Lexer
                     't'     => "\t",
                     'r'     => "\r",
                     '\\'    => '\\',
+                    '"'     => '"',
+                    "'"     => "'",
+                    '0'     => "\0",
                     default => '\\' . $next,
                 };
 
@@ -283,12 +287,20 @@ final class Lexer
             if ($ch === $quote) {
                 $this->pos++;
 
+                $closed = true;
+
                 break;
             }
 
             $value .= $ch;
 
             $this->pos++;
+        }
+
+        if (! $closed) {
+            throw new AntlersSyntaxException(
+                sprintf('Unterminated string starting at position %d', $start),
+            );
         }
 
         $this->tokens[] = new Token(TokenType::String, $value, $start);
