@@ -134,6 +134,10 @@ final class CoreModifiers
         $registry->register('wrap', static function (mixed $v, array $p): string {
             $tag = self::string($p[0] ?? 'span');
 
+            if (preg_match('/^[a-zA-Z][a-zA-Z0-9-]*$/', $tag) !== 1) {
+                return self::string($v);
+            }
+
             return sprintf('<%s>', $tag) . self::string($v) . sprintf('</%s>', $tag);
         });
 

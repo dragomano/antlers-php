@@ -218,6 +218,15 @@ it('applies wrap modifier', function (): void {
         ->toBe('<strong>hello</strong>');
 });
 
+it('returns original value for wrap modifier with invalid tag name', function (): void {
+    expect(engine()->render('{{ text | wrap:"div class=\"x\"" }}', ['text' => 'hello']))
+        ->toBe('hello')
+        ->and(engine()->render('{{ text | wrap:"<script>" }}', ['text' => 'hello']))
+        ->toBe('hello')
+        ->and(engine()->render('{{ text | wrap:"123" }}', ['text' => 'hello']))
+        ->toBe('hello');
+});
+
 it('applies surround modifier', function (): void {
     expect(engine()->render('{{ text | surround:"[":"]" }}', ['text' => 'hello']))
         ->toBe('[hello]');
