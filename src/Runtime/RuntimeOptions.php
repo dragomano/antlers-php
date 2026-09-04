@@ -44,4 +44,26 @@ final class RuntimeOptions
 
         return $fallback;
     }
+
+    /**
+     * Runs a fragment that must not report failures and restores the policy
+     * afterwards. The flag lives here, so the only place that turns it off
+     * temporarily is the object that owns it.
+     *
+     * @template T
+     * @param  callable(): T $evaluate
+     * @return T
+     */
+    public function withoutStrict(callable $evaluate): mixed
+    {
+        $previous = $this->strict;
+
+        $this->strict = false;
+
+        try {
+            return $evaluate();
+        } finally {
+            $this->strict = $previous;
+        }
+    }
 }

@@ -147,3 +147,37 @@ it('lets loop scope shadow globals without leaking after the loop', function ():
         'items' => ['A', 'B'],
     ]))->toBe('AB|Global');
 });
+
+/*
+ * A paired block iterates whenever the keys are all integers. Gaps are normal
+ * in data that went through array_filter() or unset(), and 1-based arrays are
+ * normal in hand-written data; only string keys mean "one item, use its fields".
+ */
+
+it('iterates int-keyed arrays whose keys are not a list', function (
+    array $items,
+    string $expected,
+): void {
+    expect(engine()->render('{{ items }}{{ key }}={{ value }},{{ /items }}', ['items' => $items]))
+        ->toBe($expected);
+})->with([
+    'gap from a filter' => [[0 => 'a', 2 => 'c'], '0=a,2=c,'],
+    'one-based'         => [[1 => 'x', 2 => 'y'], '1=x,2=y,'],
+    'reversed'          => [[2 => 'x', 1 => 'y'], '2=x,1=y,'],
+]);
+
+it('keeps loop variables consistent for a gapped array', function (): void {
+    expect(engine()->render('{{ items }}{{ count }}/{{ total }}{{ first ? "F" : "" }}{{ last ? "L" : "" }}|{{ /items }}', [
+        'items' => array_filter([1, 0, 3]),
+    ]))->toBe('1/2F|2/2L|');
+});
+
+it('renders a single frame when the keys are strings', function (
+    array $item,
+    string $expected,
+): void {
+    expect(engine()->render('{{ user }}{{ name }}{{ /user }}', ['user' => $item]))->toBe($expected);
+})->with([
+    'associative' => [['name' => 'Alice'], 'Alice'],
+    'mixed keys'  => [[0 => 'ignored', 'name' => 'Alice'], 'Alice'],
+]);

@@ -147,6 +147,10 @@ Neither operator throws for an undefined left side, even in strict mode — both
 {{ /posts }}
 ```
 
+A paired block decides from the value's keys: all-integer keys iterate — including gaps left by
+`array_filter()` or `unset()` and 1-based data — while any string key means a single item whose
+fields become variables.
+
 **Variables available inside loops include:**
 
 | Variable | Description |
@@ -183,6 +187,18 @@ Paired array loops also support neighbor access via colon notation:
 ```antlers
 {{ set greeting = "Hello" }}
 {{ greeting }}, {{ name }}!
+```
+
+`{{ greeting = "Hello" }}` is the same assignment in expression form.
+
+An assignment writes into the innermost scope frame. Frames are opened by the render itself, by
+every loop iteration, and by every partial and section body — conditions and truthy blocks are
+not frames. So a value set inside `{{ if }}` is still there afterwards, while one set inside a
+loop body is gone once that iteration ends:
+
+```antlers
+{{ if user }}{{ set label = "member" }}{{ /if }}{{ label }}   {{# member #}}
+{{ items }}{{ set seen = title }}{{ /items }}{{ seen }}       {{# empty #}}
 ```
 
 ### Comments

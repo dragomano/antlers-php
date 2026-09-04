@@ -171,9 +171,6 @@ final class NodeProcessor
         }
 
         if ($node instanceof SetNode) {
-            $this->processSet();
-
-            // Update current scope frame
             $this->scope->write($node->variableName, $this->evaluateNodeValue($node->value, $scope));
 
             return '';
@@ -293,7 +290,9 @@ final class NodeProcessor
             return '';
         }
 
-        return $this->renderChildrenWithScope([], $children);
+        // A condition is not a scope: it adds no variables, and opening a frame
+        // here would throw away assignments made inside the branch.
+        return $this->processNodes($children);
     }
 
     /**
@@ -463,11 +462,6 @@ final class NodeProcessor
         return $this->evaluator->stringify($result->value);
     }
 
-    private function processSet(): void
-    {
-        // Value is set in the caller after evaluating
-    }
-
     /**
      * Called by processRawAntlersNode when the tag turns out to be a paired variable.
      */
@@ -489,8 +483,9 @@ final class NodeProcessor
     {
         $items = $this->iterableToArray($value);
         if ($items !== null && $items !== []) {
-            // Check if it's a list (numeric keys) or associative array
-            if (array_is_list($items)) {
+            // Gaps left by array_filter() or unset() and 1-based data are still a
+            // collection; only string keys mean "one item, use its fields".
+            if (array_filter(array_keys($items), is_string(...)) === []) {
                 return $this->iterateItems($items, $children);
             }
 
@@ -504,8 +499,9 @@ final class NodeProcessor
         }
 
         if ($this->evaluator->isTruthy($value)) {
-            // Scalar or object — just render children with current scope
-            return $this->renderChildrenWithScope([], $children);
+            // Scalar or object with nothing to add to the scope: render in place,
+            // so the body behaves like a condition and keeps its assignments.
+            return $this->processNodes($children);
         }
 
         return '';

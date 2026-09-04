@@ -272,15 +272,9 @@ final readonly class ExpressionEvaluator
      */
     private function evaluateOptional(AbstractNode $node, array $scope, ?callable $assignmentWriter = null): ValueResult
     {
-        $previous = $this->options->strict;
-
-        $this->options->strict = false;
-
-        try {
-            return $this->evaluateResult($node, $scope, $assignmentWriter);
-        } finally {
-            $this->options->strict = $previous;
-        }
+        return $this->options->withoutStrict(
+            fn(): ValueResult => $this->evaluateResult($node, $scope, $assignmentWriter),
+        );
     }
 
     /**
