@@ -515,6 +515,17 @@ of those fallbacks into an `AntlersRuntimeException` instead:
 | `{{ partial }}` resolving outside the template roots | `''` | throws |
 | `regex_replace` with a failing pattern | subject unchanged | throws |
 
+Every `AntlersRuntimeException` carries the `templateLine` of the statement that failed and
+repeats it in the message, so a failure in a long template does not have to be bisected:
+
+```php
+$engine->render("<h1>{{ title }}</h1>\n<p>{{ missing }}</p>", ['title' => 'Home']);
+// throws: Undefined variable: "missing" on line 2
+```
+
+The line is the innermost `{{ }}` that can be blamed, not the block around it: a failure inside
+`{{ if }}` or a loop body reports its own line.
+
 `??` and `???` never throw for an undefined left side, in either mode. The `dump` tag is not
 affected either: an empty result there means debug mode is off, which is a setting rather than
 a failure.

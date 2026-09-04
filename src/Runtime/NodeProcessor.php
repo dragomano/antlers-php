@@ -141,7 +141,11 @@ final class NodeProcessor
         $output = '';
 
         foreach ($nodes as $node) {
-            $output .= $this->processNode($node, $this->scope->all());
+            try {
+                $output .= $this->processNode($node, $this->scope->all());
+            } catch (AntlersRuntimeException $e) {
+                throw $e->atLine($node->line);
+            }
         }
 
         return $output;

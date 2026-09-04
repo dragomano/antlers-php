@@ -60,6 +60,20 @@ final class LanguageParser
      */
     public function parseNode(AntlersNode $node): AbstractNode
     {
+        $parsed = $this->parseNodeContent($node);
+
+        // Everything parsed out of this {{ }} belongs to its line, so runtime
+        // failures can be attributed to it without threading a position through
+        // evaluation.
+        if ($parsed->line === 0) {
+            $parsed->line = $node->line;
+        }
+
+        return $parsed;
+    }
+
+    private function parseNodeContent(AntlersNode $node): AbstractNode
+    {
         $raw = $node->rawContent;
 
         $this->baseLine = $node->line;
