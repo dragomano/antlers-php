@@ -73,4 +73,28 @@ enum TokenType: string
 
     // Special
     case Eof = 'T_EOF';
+
+    /** Surface syntax for the punctuation and operator tokens, for error messages. */
+    private const SYMBOLS = [
+        'T_DOLLAR'   => '$',
+        'T_COLON'    => ':',
+        'T_PIPE'     => '|',
+        'T_QUESTION' => '?',
+        'T_QEQUALS'  => '?=',
+        'T_LPAREN'   => '(',
+        'T_RPAREN'   => ')',
+        'T_LBRACKET' => '[',
+        'T_RBRACKET' => ']',
+        'T_COMMA'    => ',',
+        'T_ARROW'    => '=>',
+        'T_EQUALS'   => '=',
+    ];
+
+    /**
+     * How this token type should be named to a template author.
+     */
+    public function describe(): string
+    {
+        return sprintf('"%s"', self::SYMBOLS[$this->value] ?? $this->value);
+    }
 }

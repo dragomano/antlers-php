@@ -20,18 +20,23 @@ final class Lexer
 
     private int $pos = 0;
 
+    private int $baseLine = 1;
+
     /** @var Token[] */
     private array $tokens = [];
 
     /**
+     * @param  int     $baseLine template line the fragment starts on, so token
+     *                           positions can be reported against the template
      * @return Token[]
      */
-    public function tokenize(string $input): array
+    public function tokenize(string $input, int $baseLine = 1): array
     {
-        $this->input  = $input;
-        $this->length = strlen($input);
-        $this->pos    = 0;
-        $this->tokens = [];
+        $this->input    = $input;
+        $this->length   = strlen($input);
+        $this->pos      = 0;
+        $this->baseLine = $baseLine;
+        $this->tokens   = [];
 
         while ($this->pos < $this->length) {
             $this->skipWhitespace();
@@ -210,12 +215,14 @@ final class Lexer
                 ':'     => $this->add(TokenType::Colon, ':'),
                 '.'     => $this->add(TokenType::Dot, '.'),
                 default => throw new AntlersSyntaxException(
-                    sprintf("Unexpected character '%s' at position %d in: %s", $ch, $this->pos, $this->input),
+                    sprintf('Unexpected character "%s"', $ch),
+                    $this->lineAt($this->pos),
+                    $this->input,
                 ),
             };
         }
 
-        $this->tokens[] = new Token(TokenType::Eof, '', $this->pos);
+        $this->push(TokenType::Eof, '', $this->pos);
 
         return $this->tokens;
     }
@@ -252,7 +259,7 @@ final class Lexer
             }
         }
 
-        $this->tokens[] = new Token(
+        $this->push(
             TokenType::Number,
             substr($this->input, $start, $this->pos - $start),
             $start,
@@ -305,11 +312,13 @@ final class Lexer
 
         if (! $closed) {
             throw new AntlersSyntaxException(
-                sprintf('Unterminated string starting at position %d', $start),
+                'Unterminated string',
+                $this->lineAt($start),
+                $this->input,
             );
         }
 
-        $this->tokens[] = new Token(TokenType::String, $value, $start);
+        $this->push(TokenType::String, $value, $start);
     }
 
     private function readIdentifier(): void
@@ -338,14 +347,28 @@ final class Lexer
             default => TokenType::Identifier,
         };
 
-        $this->tokens[] = new Token($type, $value, $start);
+        $this->push($type, $value, $start);
     }
 
     private function add(TokenType $type, string $value): void
     {
-        $this->tokens[] = new Token($type, $value, $this->pos);
+        $this->push($type, $value, $this->pos);
 
         $this->pos += strlen($value);
+    }
+
+    /**
+     * The single place tokens are created, so every one of them carries its
+     * template line without each reader having to remember to stamp it.
+     */
+    private function push(TokenType $type, string $value, int $offset): void
+    {
+        $this->tokens[] = new Token($type, $value, $offset, $this->lineAt($offset));
+    }
+
+    private function lineAt(int $offset): int
+    {
+        return $this->baseLine + substr_count(substr($this->input, 0, $offset), "\n");
     }
 
     private function tryRead(string $str): bool

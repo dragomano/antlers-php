@@ -237,6 +237,13 @@ line — they are not rendered as best-effort output:
 {{ /if }}                     {{# Unexpected closing tag {{ /if }} #}}
 ```
 
+Every `AntlersSyntaxException` carries `templateLine` and `templateSource`, and repeats both in
+its message, so `getMessage()` alone is enough to locate the problem:
+
+```
+Expected ")" but found end of expression on line 5 in "( 1 + 2"
+```
+
 ## Built-in Tags
 
 The standalone core currently registers these built-in tags:

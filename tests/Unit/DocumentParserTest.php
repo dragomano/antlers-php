@@ -131,7 +131,7 @@ describe('DocumentParser', function (): void {
             $this->parser->parse("Before\n{{ name");
             $this->fail('Expected AntlersSyntaxException was not thrown.');
         } catch (AntlersSyntaxException $e) {
-            expect($e->getMessage())->toBe('Unclosed Antlers tag {{')
+            expect($e->getMessage())->toBe('Unclosed Antlers tag "{{" on line 2')
                 ->and($e->templateLine)->toBe(2);
         }
     });
@@ -141,7 +141,7 @@ describe('DocumentParser', function (): void {
             $this->parser->parse("Before\n{{# comment");
             $this->fail('Expected AntlersSyntaxException was not thrown.');
         } catch (AntlersSyntaxException $e) {
-            expect($e->getMessage())->toBe('Unclosed Antlers comment {{#')
+            expect($e->getMessage())->toBe('Unclosed Antlers comment "{{#" on line 2')
                 ->and($e->templateLine)->toBe(2);
         }
     });
@@ -151,7 +151,7 @@ describe('DocumentParser', function (): void {
             $this->parser->parse("Before\n@{{ raw");
             $this->fail('Expected AntlersSyntaxException was not thrown.');
         } catch (AntlersSyntaxException $e) {
-            expect($e->getMessage())->toBe('Unclosed escaped antlers @{{')
+            expect($e->getMessage())->toBe('Unclosed escaped Antlers block "@{{" on line 2')
                 ->and($e->templateLine)->toBe(2);
         }
     });
@@ -161,7 +161,7 @@ describe('DocumentParser', function (): void {
             $this->parser->parse("Before\n{{ noparse }}raw text");
             $this->fail('Expected AntlersSyntaxException was not thrown.');
         } catch (AntlersSyntaxException $e) {
-            expect($e->getMessage())->toBe('Unclosed noparse block {{ noparse }}')
+            expect($e->getMessage())->toBe('Unclosed "{{ noparse }}" block on line 2')
                 ->and($e->templateLine)->toBe(2);
         }
     });
@@ -171,7 +171,7 @@ describe('DocumentParser', function (): void {
             $this->parser->parse('{{ noparse }}before {{ name');
             $this->fail('Expected AntlersSyntaxException was not thrown.');
         } catch (AntlersSyntaxException $e) {
-            expect($e->getMessage())->toBe('Unclosed Antlers tag {{')
+            expect($e->getMessage())->toBe('Unclosed Antlers tag "{{" on line 1')
                 ->and($e->templateLine)->toBe(1);
         }
     });
@@ -181,7 +181,7 @@ describe('DocumentParser', function (): void {
             $this->parser->parse('{{ noparse }}{{ name }}');
             $this->fail('Expected AntlersSyntaxException was not thrown.');
         } catch (AntlersSyntaxException $e) {
-            expect($e->getMessage())->toBe('Unclosed noparse block {{ noparse }}')
+            expect($e->getMessage())->toBe('Unclosed "{{ noparse }}" block on line 1')
                 ->and($e->templateLine)->toBe(1);
         }
     });

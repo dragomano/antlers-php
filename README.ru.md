@@ -237,6 +237,13 @@ echo $engine->render('Привет, {{ name }}!', ['name' => 'мир']);
 {{ /if }}                     {{# Unexpected closing tag {{ /if }} #}}
 ```
 
+Каждый `AntlersSyntaxException` несёт `templateLine` и `templateSource` и повторяет их в тексте
+сообщения, так что одного `getMessage()` достаточно, чтобы найти место ошибки:
+
+```
+Expected ")" but found end of expression on line 5 in "( 1 + 2"
+```
+
 ## Встроенные теги
 
 В standalone-ядре сейчас зарегистрированы такие встроенные теги:

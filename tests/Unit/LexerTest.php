@@ -158,7 +158,7 @@ describe('Lexer', function (): void {
 
     it('throws a syntax exception for unexpected characters', function (): void {
         expect(fn() => $this->lexer->tokenize('@'))
-            ->toThrow(AntlersSyntaxException::class, "Unexpected character '@' at position 0 in: @");
+            ->toThrow(AntlersSyntaxException::class, 'Unexpected character "@" on line 1 in "@"');
     });
 
     it('always ends with EOF token', function (): void {
@@ -168,12 +168,18 @@ describe('Lexer', function (): void {
 
     it('throws a syntax exception for unterminated double-quoted string', function (): void {
         expect(fn() => $this->lexer->tokenize('"hello'))
-            ->toThrow(AntlersSyntaxException::class, 'Unterminated string starting at position 0');
+            ->toThrow(AntlersSyntaxException::class, 'Unterminated string on line 1');
     });
 
     it('throws a syntax exception for unterminated single-quoted string', function (): void {
         expect(fn() => $this->lexer->tokenize("'world"))
-            ->toThrow(AntlersSyntaxException::class, 'Unterminated string starting at position 0');
+            ->toThrow(AntlersSyntaxException::class, 'Unterminated string on line 1');
+    });
+
+    it('reports positions against the template line the fragment starts on', function (): void {
+        expect(fn() => $this->lexer->tokenize("a\n@", 7))
+            ->toThrow(AntlersSyntaxException::class, 'Unexpected character "@" on line 8')
+            ->and($this->lexer->tokenize("a\nb", 7)[1]->line)->toBe(8);
     });
 
     it('tokenizes escaped double quotes inside double-quoted string', function (): void {

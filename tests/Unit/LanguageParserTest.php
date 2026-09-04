@@ -199,26 +199,26 @@ describe('LanguageParser', function (): void {
             ->and($extraSemicolons->statements)->toHaveCount(2)
             ->and($trailingSemicolon)->toBeInstanceOf(VariableNode::class)
             ->and(fn() => $this->languageParser->parseExpression('()'))
-            ->toThrow(AntlersSyntaxException::class, 'Expected expression before statement terminator')
+            ->toThrow(AntlersSyntaxException::class, 'Expected an expression on line 1 in "()"')
             ->and(fn() => $this->languageParser->parseExpression('name )'))
-            ->toThrow(AntlersSyntaxException::class, "Unexpected token T_RPAREN (')') in expression")
+            ->toThrow(AntlersSyntaxException::class, 'Unexpected ")" in expression on line 1 in "name )"')
             ->and(fn() => $this->languageParser->parseExpression('$items[0)'))
-            ->toThrow(AntlersSyntaxException::class, "Expected T_RBRACKET but got T_RPAREN (')')");
+            ->toThrow(AntlersSyntaxException::class, 'Expected "]" but found ")" on line 1 in "$items[0)"');
     });
 
     it('validates collection operators and modifier parsing edge cases', function (): void {
         expect(fn() => $this->languageParser->parseExpression('items where (=> active)'))
-            ->toThrow(AntlersSyntaxException::class, 'Expected identifier before => in where operator')
+            ->toThrow(AntlersSyntaxException::class, 'Expected an identifier before "=>" in the where operator')
             ->and(fn() => $this->languageParser->parseExpression('items where (1 => active)'))
-            ->toThrow(AntlersSyntaxException::class, 'Expected identifier before => in where operator')
+            ->toThrow(AntlersSyntaxException::class, 'Expected an identifier before "=>" in the where operator')
             ->and(fn() => $this->languageParser->parseExpression('items take (1, 2)'))
             ->toThrow(AntlersSyntaxException::class, 'Expected a single parenthesized expression')
             ->and(fn() => $this->languageParser->parseExpression('items groupby (field foo bar)'))
             ->toThrow(AntlersSyntaxException::class, 'Invalid groupby alias')
             ->and(fn() => $this->languageParser->parseExpression('items groupby (field) as 1'))
-            ->toThrow(AntlersSyntaxException::class, 'Expected collection alias name')
+            ->toThrow(AntlersSyntaxException::class, 'Expected a collection alias name')
             ->and(fn() => $this->languageParser->parseExpression('name | 1'))
-            ->toThrow(AntlersSyntaxException::class, "Expected modifier name but got T_NUMBER ('1')");
+            ->toThrow(AntlersSyntaxException::class, 'Expected a modifier name but found "1" on line 1 in "name | 1"');
     });
 
     it('parses nested ternaries arrays explicit variables and parenthesized groups', function (): void {
@@ -261,7 +261,7 @@ describe('LanguageParser', function (): void {
             ->and($unclosedTail->parts[2])->toBe(' ')
             ->and($unclosedTail->parts[3])->toBe('{')
             ->and(fn() => $this->languageParser->parseNode(parserNode('cache', 'cache key="home"')))
-            ->toThrow(AntlersSyntaxException::class, "Unexpected token T_IDENTIFIER ('key') in expression");
+            ->toThrow(AntlersSyntaxException::class, 'Unexpected "key" in expression in "cache key="home""');
     });
 
     it('handles trailing tag whitespace and nested ternary branch token slicing', function (): void {
@@ -296,11 +296,14 @@ describe('LanguageParser', function (): void {
 
     it('throws a syntax exception for an empty statement before a terminator', function (): void {
         expect(fn() => $this->languageParser->parseExpression('; count'))
-            ->toThrow(AntlersSyntaxException::class, 'Unexpected token [T_SEMICOLON:;] in expression');
+            ->toThrow(AntlersSyntaxException::class, 'Unexpected ";" in expression on line 1 in "; count"');
     });
 
     it('throws a syntax exception when an explicit variable path is incomplete', function (): void {
         expect(fn() => $this->languageParser->parseExpression('$user:'))
-            ->toThrow(AntlersSyntaxException::class, 'Expected identifier after T_COLON in variable path');
+            ->toThrow(
+                AntlersSyntaxException::class,
+                'Expected an identifier after ":" in a variable path on line 1 in "$user:"',
+            );
     });
 });

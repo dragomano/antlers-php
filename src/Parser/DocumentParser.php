@@ -61,19 +61,17 @@ final class DocumentParser
             if ($this->matchAt('@{{')) {
                 $this->flushLiteral($literalStart, $this->pos);
 
-                $this->pos += 3;
-
-                $end = strpos($this->template, '}}', $this->pos);
+                $end = strpos($this->template, '}}', $this->pos + 3);
 
                 if ($end === false) {
-                    throw new AntlersSyntaxException('Unclosed escaped antlers @{{', $this->line);
+                    throw new AntlersSyntaxException('Unclosed escaped Antlers block "@{{"', $this->line);
                 }
 
-                $inner = substr($this->template, $this->pos, $end - $this->pos);
+                $inner = substr($this->template, $this->pos + 3, $end - ($this->pos + 3));
 
                 $this->nodes[] = $this->makeLiteral('{{' . $inner . '}}');
 
-                $this->pos = $end + 2;
+                $this->advanceTo($end + 2);
 
                 $literalStart = $this->pos;
 
@@ -84,17 +82,13 @@ final class DocumentParser
             if ($this->matchAt('{{#')) {
                 $this->flushLiteral($literalStart, $this->pos);
 
-                $this->pos += 3;
-
-                $end = strpos($this->template, '#}}', $this->pos);
+                $end = strpos($this->template, '#}}', $this->pos + 3);
 
                 if ($end === false) {
-                    throw new AntlersSyntaxException('Unclosed Antlers comment {{#', $this->line);
+                    throw new AntlersSyntaxException('Unclosed Antlers comment "{{#"', $this->line);
                 }
 
-                $this->line += substr_count(substr($this->template, $this->pos, $end - $this->pos), "\n");
-
-                $this->pos = $end + 3;
+                $this->advanceTo($end + 3);
 
                 $literalStart = $this->pos;
 
@@ -144,23 +138,25 @@ final class DocumentParser
 
         $end = strpos($this->template, '}}', $this->pos);
         if ($end === false) {
-            throw new AntlersSyntaxException('Unclosed Antlers tag {{', $this->line);
+            throw new AntlersSyntaxException('Unclosed Antlers tag "{{"', $this->line);
         }
 
         $raw = substr($this->template, $this->pos, $end - $this->pos);
 
-        $this->line += substr_count($raw, "\n");
-
-        $this->pos = $end + 2;
+        $this->advanceTo($end + 2);
 
         $trimmed = trim($raw);
         if ($trimmed === '') {
             return null;
         }
 
+        // Point at where the content actually starts: rawContent is trimmed, so
+        // token offsets inside it only line up if leading newlines are counted.
+        $leading = substr($raw, 0, strlen($raw) - strlen(ltrim($raw)));
+
         $node               = new AntlersNode();
         $node->rawContent   = $trimmed;
-        $node->line         = $startLine;
+        $node->line         = $startLine + substr_count($leading, "\n");
         $node->isClosingTag = str_starts_with($trimmed, '/');
         $node->name         = $this->extractTagName($trimmed);
 
@@ -171,13 +167,7 @@ final class DocumentParser
     {
         $startLine = $this->line;
 
-        $this->pos += 2;
-
-        $openingRaw = substr($this->template, $this->pos, $openEnd - $this->pos);
-
-        $this->line += substr_count($openingRaw, "\n");
-
-        $this->pos = $openEnd + 2;
+        $this->advanceTo($openEnd + 2);
 
         $contentStart = $this->pos;
         $depth        = 1;
@@ -185,24 +175,19 @@ final class DocumentParser
         while ($this->pos < $this->length) {
             $nextOpen = strpos($this->template, '{{', $this->pos);
             if ($nextOpen === false) {
-                throw new AntlersSyntaxException('Unclosed noparse block {{ noparse }}', $startLine);
+                throw new AntlersSyntaxException('Unclosed "{{ noparse }}" block', $startLine);
             }
 
-            $this->line += substr_count(substr($this->template, $this->pos, $nextOpen - $this->pos), "\n");
-
-            $this->pos = $nextOpen + 2;
+            $this->advanceTo($nextOpen + 2);
 
             $end = strpos($this->template, '}}', $this->pos);
             if ($end === false) {
-                throw new AntlersSyntaxException('Unclosed Antlers tag {{', $this->line);
+                throw new AntlersSyntaxException('Unclosed Antlers tag "{{"', $this->line);
             }
 
-            $raw     = substr($this->template, $this->pos, $end - $this->pos);
-            $trimmed = trim($raw);
+            $trimmed = trim(substr($this->template, $this->pos, $end - $this->pos));
 
-            $this->line += substr_count($raw, "\n");
-
-            $this->pos = $end + 2;
+            $this->advanceTo($end + 2);
 
             if ($trimmed === 'noparse') {
                 $depth++;
@@ -229,7 +214,7 @@ final class DocumentParser
             return $node;
         }
 
-        throw new AntlersSyntaxException('Unclosed noparse block {{ noparse }}', $startLine);
+        throw new AntlersSyntaxException('Unclosed "{{ noparse }}" block', $startLine);
     }
 
     private function findNoparseOpenEnd(): ?int
@@ -276,6 +261,16 @@ final class DocumentParser
     private function matchAt(string $needle): bool
     {
         return substr($this->template, $this->pos, strlen($needle)) === $needle;
+    }
+
+    /**
+     * Moves the cursor forward, keeping the line counter in step. Every jump
+     * goes through here so no branch can forget the newlines it skipped.
+     */
+    private function advanceTo(int $pos): void
+    {
+        $this->line += substr_count(substr($this->template, $this->pos, $pos - $this->pos), "\n");
+        $this->pos   = $pos;
     }
 
     /**

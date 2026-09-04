@@ -48,6 +48,12 @@ final class LanguageParser
 
     private int $pos = 0;
 
+    /** Template line the fragment currently being parsed starts on. */
+    private int $baseLine = 1;
+
+    /** The fragment currently being parsed, quoted back in error messages. */
+    private string $source = '';
+
     public function __construct()
     {
         $this->lexer = new Lexer();
@@ -60,6 +66,8 @@ final class LanguageParser
     public function parseNode(AntlersNode $node): AbstractNode
     {
         $raw = $node->rawContent;
+
+        $this->baseLine = $node->line;
 
         // Closing tags don't need parsing
         if ($node->isClosingTag) {
@@ -266,7 +274,10 @@ final class LanguageParser
         $eqPos   = strpos($content, '=');
 
         if ($eqPos === false) {
-            throw new AntlersSyntaxException(sprintf('Invalid set syntax: {{ %s }}', $raw));
+            throw new AntlersSyntaxException(
+                sprintf('Invalid set syntax: {{ %s }}', $raw),
+                $this->baseLine,
+            );
         }
 
         $varName  = trim(substr($content, 0, $eqPos));
@@ -436,7 +447,8 @@ final class LanguageParser
     public function parseExpression(string $input): AbstractNode
     {
         $input        = trim($input);
-        $this->tokens = $this->lexer->tokenize($input);
+        $this->source = $input;
+        $this->tokens = $this->lexer->tokenize($input, $this->baseLine);
         $this->pos    = 0;
 
         return $this->parseStatementSequence();
@@ -445,7 +457,7 @@ final class LanguageParser
     private function parseStatementSequence(TokenType $terminator = TokenType::Eof): AbstractNode
     {
         if ($this->peek()->is($terminator, TokenType::Eof)) {
-            throw new AntlersSyntaxException('Expected expression before statement terminator');
+            $this->syntaxError('Expected an expression');
         }
 
         $statements   = [];
@@ -476,8 +488,9 @@ final class LanguageParser
         $token = $this->peek();
         if (! $token->is($terminator, TokenType::Eof)) {
 
-            throw new AntlersSyntaxException(
-                sprintf("Unexpected token %s ('%s') in expression", $token->type->value, $token->value),
+            $this->syntaxError(
+                sprintf('Unexpected %s in expression', $this->describeToken($token)),
+                $token,
             );
         }
 
@@ -505,7 +518,7 @@ final class LanguageParser
         }
 
         if (! $expr instanceof VariableNode) {
-            throw new AntlersSyntaxException('Assignment target must be a variable path');
+            $this->syntaxError('Assignment target must be a variable path');
         }
 
         $this->advance();
@@ -610,7 +623,7 @@ final class LanguageParser
             $token = $this->tokens[$cursor] ?? new Token(TokenType::Eof, '');
 
             if ($token->is(TokenType::Eof)) {
-                throw new AntlersSyntaxException('Unterminated ternary expression');
+                $this->syntaxError('Unterminated ternary expression', $token);
             }
 
             if ($token->is(TokenType::LParen)) {
@@ -674,7 +687,7 @@ final class LanguageParser
         $previousTokens = $this->tokens;
         $previousPos    = $this->pos;
 
-        $this->tokens = [...$tokens, new Token(TokenType::Eof, '')];
+        $this->tokens = [...$tokens, $this->endToken()];
         $this->pos    = 0;
 
         try {
@@ -817,8 +830,9 @@ final class LanguageParser
         }
 
         // Unexpected
-        throw new AntlersSyntaxException(
-            sprintf('Unexpected token %s in expression', $token),
+        $this->syntaxError(
+            sprintf('Unexpected %s in expression', $this->describeToken($token)),
+            $token,
         );
     }
 
@@ -894,9 +908,10 @@ final class LanguageParser
             $next      = $this->peek();
 
             if (! $next->is(TokenType::Identifier)) {
-                throw new AntlersSyntaxException(
-                    sprintf('Expected identifier after %s in variable path', $separator->type->value),
-                );
+                $this->syntaxError(sprintf(
+                    'Expected an identifier after %s in a variable path',
+                    $separator->type->describe(),
+                ), $next);
             }
 
             $path .= $separator->value . $this->advance()->value;
@@ -956,12 +971,12 @@ final class LanguageParser
         foreach ($tokens as $index => $token) {
             if ($token->is(TokenType::Arrow)) {
                 if ($index === 0) {
-                    throw new AntlersSyntaxException('Expected identifier before => in where operator');
+                    $this->syntaxError('Expected an identifier before "=>" in the where operator', $token);
                 }
 
                 $scopeToken = $tokens[$index - 1] ?? null;
                 if (! $scopeToken instanceof Token || ! $scopeToken->is(TokenType::Identifier)) {
-                    throw new AntlersSyntaxException('Expected identifier before => in where operator');
+                    $this->syntaxError('Expected an identifier before "=>" in the where operator', $token);
                 }
 
                 $alias  = $scopeToken->value;
@@ -1028,7 +1043,7 @@ final class LanguageParser
         $groups = $this->parseParenthesizedTokenGroups();
 
         if (count($groups) !== 1) {
-            throw new AntlersSyntaxException('Expected a single parenthesized expression');
+            $this->syntaxError('Expected a single parenthesized expression');
         }
 
         return $groups[0];
@@ -1051,7 +1066,7 @@ final class LanguageParser
             $token = $this->tokens[$cursor] ?? new Token(TokenType::Eof, '');
 
             if ($token->is(TokenType::Eof)) {
-                throw new AntlersSyntaxException('Unterminated parenthesized expression');
+                $this->syntaxError('Unterminated parenthesized expression', $token);
             }
 
             if ($token->is(TokenType::LParen, TokenType::LBracket)) {
@@ -1113,7 +1128,7 @@ final class LanguageParser
         }
 
         if (count($tail) !== 1) {
-            throw new AntlersSyntaxException('Invalid groupby alias');
+            $this->syntaxError('Invalid groupby alias');
         }
 
         return [$field, $this->parseCollectionAliasToken($tail[0])];
@@ -1128,7 +1143,7 @@ final class LanguageParser
         $previousTokens = $this->tokens;
         $previousPos    = $this->pos;
 
-        $this->tokens = [...$tokens, new Token(TokenType::Eof, '')];
+        $this->tokens = [...$tokens, $this->endToken()];
         $this->pos    = 0;
 
         try {
@@ -1148,7 +1163,7 @@ final class LanguageParser
             return $token->value;
         }
 
-        throw new AntlersSyntaxException('Expected collection alias name');
+        $this->syntaxError('Expected a collection alias name', $token);
     }
 
     private function consumeModifierName(): Token
@@ -1168,8 +1183,9 @@ final class LanguageParser
             return $this->advance();
         }
 
-        throw new AntlersSyntaxException(
-            sprintf("Expected modifier name but got %s ('%s')", $token->type->value, $token->value),
+        $this->syntaxError(
+            sprintf('Expected a modifier name but found %s', $this->describeToken($token)),
+            $token,
         );
     }
 
@@ -1297,33 +1313,62 @@ final class LanguageParser
             TokenType::StarEquals => '*',
             TokenType::SlashEquals => '/',
             TokenType::PercentEquals => '%',
-            default => throw new AntlersSyntaxException('Unsupported assignment operator: ' . $token->value),
+            default => $this->syntaxError('Unsupported assignment operator: ' . $token->value, $token),
         };
     }
 
     private function peek(): Token
     {
-        return $this->tokens[$this->pos] ?? new Token(TokenType::Eof, '');
+        return $this->tokens[$this->pos] ?? $this->endToken();
     }
 
     private function advance(): Token
     {
-        $token = $this->tokens[$this->pos] ?? new Token(TokenType::Eof, '');
+        $token = $this->tokens[$this->pos] ?? $this->endToken();
 
         $this->pos++;
 
         return $token;
     }
 
+    /**
+     * Stand-in for a missing token, positioned at the last real one so errors
+     * past the end of a fragment still report where that fragment was.
+     */
+    private function endToken(): Token
+    {
+        $last = $this->tokens[count($this->tokens) - 1] ?? null;
+
+        return new Token(TokenType::Eof, '', $last->offset ?? 0, $last->line ?? $this->baseLine);
+    }
+
     private function consume(TokenType $type): void
     {
         $token = $this->peek();
         if (! $token->is($type)) {
-            throw new AntlersSyntaxException(
-                sprintf("Expected %s but got %s ('%s')", $type->value, $token->type->value, $token->value),
-            );
+            $this->syntaxError(sprintf(
+                'Expected %s but found %s',
+                $type->describe(),
+                $this->describeToken($token),
+            ), $token);
         }
 
         $this->advance();
+    }
+
+    /**
+     * The single throw site for expression errors, so every one of them carries
+     * the template line and the offending fragment.
+     */
+    private function syntaxError(string $message, ?Token $token = null): never
+    {
+        throw new AntlersSyntaxException($message, ($token ?? $this->peek())->line, $this->source);
+    }
+
+    private function describeToken(Token $token): string
+    {
+        return $token->is(TokenType::Eof)
+            ? 'end of expression'
+            : sprintf('"%s"', $token->value);
     }
 }
