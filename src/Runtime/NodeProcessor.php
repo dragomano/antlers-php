@@ -33,23 +33,12 @@ final class NodeProcessor
     /** @var array<string, mixed> */
     private array $globalData = [];
 
-    /** @var array<int, array<string, mixed>> Scope stack; each entry is a data frame */
-    private array $scopeStack = [];
+    private Scope $scope;
 
-    /** @var array<string, string> */
-    private array $sections = [];
+    private RenderState $state;
 
-    /** @var array<string, string[]> */
-    private array $stacks = [];
-
-    /** @var array<string, true> */
-    private array $onceKeys = [];
-
-    /** @var array<string, int> */
-    private array $increments = [];
-
-    /** @var array<string, int> */
-    private array $switches = [];
+    /** Nesting depth of reduce(); zero means the next call starts a new render. */
+    private int $depth = 0;
 
     /** @var string[] */
     private array $templatePathStack = [];
@@ -71,7 +60,10 @@ final class NodeProcessor
         private readonly PathDataManager $paths,
         private readonly LanguageParser $parser,
         private readonly RuntimeOptions $options,
-    ) {}
+    ) {
+        $this->scope = new Scope();
+        $this->state = new RenderState();
+    }
 
     /**
      * @param array<string, mixed> $data
@@ -125,30 +117,20 @@ final class NodeProcessor
      */
     public function reduce(array $nodes, array $data = []): string
     {
-        if ($this->scopeStack === []) {
-            $this->resetPerRenderState();
+        if ($this->depth === 0) {
+            $this->scope = new Scope($this->globalData);
+            $this->state = new RenderState();
         }
 
-        $this->pushScope($data);
+        $this->depth++;
+        $this->scope->push($data);
 
         try {
             return $this->processNodes($nodes);
         } finally {
-            $this->popScope();
+            $this->scope->pop();
+            $this->depth--;
         }
-    }
-
-    /**
-     * State that belongs to a single top-level render. Reset before the root
-     * frame is pushed so a failed render cannot bleed into the next one.
-     */
-    private function resetPerRenderState(): void
-    {
-        $this->sections   = [];
-        $this->stacks     = [];
-        $this->onceKeys   = [];
-        $this->increments = [];
-        $this->switches   = [];
     }
 
     /**
@@ -159,7 +141,7 @@ final class NodeProcessor
         $output = '';
 
         foreach ($nodes as $node) {
-            $output .= $this->processNode($node, $this->currentScope());
+            $output .= $this->processNode($node, $this->scope->all());
         }
 
         return $output;
@@ -188,8 +170,7 @@ final class NodeProcessor
             $this->processSet();
 
             // Update current scope frame
-            $this->scopeStack[count($this->scopeStack) - 1][$node->variableName]
-                = $this->evaluateNodeValue($node->value, $scope);
+            $this->scope->write($node->variableName, $this->evaluateNodeValue($node->value, $scope));
 
             return '';
         }
@@ -197,7 +178,7 @@ final class NodeProcessor
         if ($node instanceof AssignmentNode) {
             $result = $this->evaluateNodeResult($node->value, $scope);
 
-            $this->writeScopeValue($node->variableName, $result->value);
+            $this->scope->write($node->variableName, $result->value);
 
             if ($node->children === []) {
                 return '';
@@ -668,32 +649,22 @@ final class NodeProcessor
 
     public function storeSection(string $name, string $content, bool $append = false): void
     {
-        $this->sections[$name] = $append
-            ? ($this->sections[$name] ?? '') . $content
-            : $content;
+        $this->state->storeSection($name, $content, $append);
     }
 
     public function yieldSection(string $name): string
     {
-        return $this->sections[$name] ?? '';
+        return $this->state->section($name);
     }
 
     public function storeStack(string $name, string $content, bool $prepend = false): void
     {
-        $this->stacks[$name] ??= [];
-
-        if ($prepend) {
-            array_unshift($this->stacks[$name], $content);
-
-            return;
-        }
-
-        $this->stacks[$name][] = $content;
+        $this->state->pushStack($name, $content, $prepend);
     }
 
     public function yieldStack(string $name): string
     {
-        return implode('', $this->stacks[$name] ?? []);
+        return $this->state->stack($name);
     }
 
     /**
@@ -701,27 +672,12 @@ final class NodeProcessor
      */
     public function renderOnce(?string $key, callable $renderer): string
     {
-        $resolvedKey = $this->resolveOnceKey($key);
-        if (isset($this->onceKeys[$resolvedKey])) {
-            return '';
-        }
-
-        $this->onceKeys[$resolvedKey] = true;
-
-        return $renderer();
+        return $this->state->markOnce($this->resolveOnceKey($key)) ? $renderer() : '';
     }
 
     public function nextIncrement(string $name, int $from = 1, int $step = 1): int
     {
-        if (! isset($this->increments[$name])) {
-            $this->increments[$name] = $from;
-
-            return $this->increments[$name];
-        }
-
-        $this->increments[$name] += $step;
-
-        return $this->increments[$name];
+        return $this->state->nextIncrement($name, $from, $step);
     }
 
     /**
@@ -729,11 +685,7 @@ final class NodeProcessor
      */
     public function nextSwitchValue(string $name, array $values): mixed
     {
-        $index = $this->switches[$name] ?? 0;
-
-        $this->switches[$name] = $index + 1;
-
-        return $values[$index % count($values)];
+        return $values[$this->state->nextSwitchIndex($name) % count($values)];
     }
 
     public function resolveTemplatePath(string $path): string
@@ -830,38 +782,17 @@ final class NodeProcessor
     }
 
     /**
-     * @param array<string, mixed> $data
-     */
-    private function pushScope(array $data): void
-    {
-        $this->scopeStack[] = $data;
-    }
-
-    private function popScope(): void
-    {
-        array_pop($this->scopeStack);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function currentScope(): array
-    {
-        return array_merge($this->globalData, ...$this->scopeStack);
-    }
-
-    /**
      * @param array<string, mixed> $scope
      * @param AbstractNode[] $children
      */
     private function renderChildrenWithScope(array $scope, array $children): string
     {
-        $this->pushScope($scope);
+        $this->scope->push($scope);
 
         try {
             return $this->processNodes($children);
         } finally {
-            $this->popScope();
+            $this->scope->pop();
         }
     }
 
@@ -983,12 +914,7 @@ final class NodeProcessor
      */
     private function assignmentWriter(): callable
     {
-        return $this->writeScopeValue(...);
-    }
-
-    private function writeScopeValue(string $name, mixed $value): void
-    {
-        $this->scopeStack[count($this->scopeStack) - 1][$name] = $value;
+        return $this->scope->write(...);
     }
 
     /**
@@ -1077,7 +1003,7 @@ final class NodeProcessor
 
         $context = $this->currentTagContext();
         if ($context === null) {
-            return 'anonymous:' . count($this->onceKeys);
+            return 'anonymous:' . $this->state->onceCount();
         }
 
         return implode(':', [

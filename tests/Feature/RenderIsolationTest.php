@@ -82,3 +82,31 @@ it('keeps the guard policy reporting after an exception on the left side of ??',
     expect(fn(): string => $engine->render('{{ secret }}', ['secret' => 'value']))
         ->toThrow(AntlersRuntimeException::class, 'Guarded variable: "secret"');
 });
+
+/*
+ * Nested renders (partials, layouts, a tag rendering its children) are part of
+ * the same render and share its state; only a top-level render starts fresh.
+ */
+
+it('shares render state with nested renders but not across renders', function (): void {
+    $engine = engine();
+    $engine->addTag(
+        'nest',
+        fn(array $parameters, array $data, $processor, string $method, array $children): string
+            => $processor->renderFragment($children, $data),
+    );
+
+    expect($engine->render('{{ nest on="1" }}{{ section:head }}A{{ /section:head }}{{ /nest }}[{{ yield:head }}]'))
+        ->toBe('[A]')
+        ->and($engine->render('[{{ yield:head }}]'))->toBe('[]');
+});
+
+/*
+ * The flattened scope is memoised, so every write has to invalidate it.
+ */
+
+it('sees a value written earlier in the same frame', function (): void {
+    expect(engine()->render('{{ set a = 1 }}{{ a }}{{ set a = 2 }}{{ a }}'))->toBe('12')
+        ->and(engine()->render('{{ items }}{{ set n = value }}{{ n }};{{ /items }}', ['items' => ['a', 'b']]))
+        ->toBe('a;b;');
+});
