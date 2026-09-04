@@ -218,6 +218,25 @@ Single tag: @{{ name }}
 {{ /markdown }}
 ```
 
+Whether `{{ name }}` is an interpolation or a paired block is decided per occurrence, by
+looking for the matching `{{ /name }}`. So the same name can be used both ways in one
+template:
+
+```antlers
+Total: {{ items | length }}
+{{ items }}<li>{{ value }}</li>{{ /items }}
+```
+
+A closing tag must close the innermost open block, and every block must be closed. Crossed,
+mismatched, unclosed and stray closing tags are `AntlersSyntaxException`s reporting the source
+line — they are not rendered as best-effort output:
+
+```antlers
+{{ if true }}A{{ /foreach }}   {{# Unexpected closing tag {{ /foreach }}, expected {{ /if }} #}}
+{{ if true }}A                {{# Unclosed tag {{ if }} #}}
+{{ /if }}                     {{# Unexpected closing tag {{ /if }} #}}
+```
+
 ## Built-in Tags
 
 The standalone core currently registers these built-in tags:

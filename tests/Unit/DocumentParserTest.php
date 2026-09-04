@@ -84,12 +84,46 @@ describe('DocumentParser', function (): void {
         expect($this->parser->parse('{{   }}'))->toBe([]);
     });
 
-    it('ignores orphaned closing tags at the root level', function (): void {
-        $nodes = $this->parser->parse('{{ /if }}Hello');
+    it('rejects an orphaned closing tag at the root level', function (): void {
+        expect(fn(): array => $this->parser->parse('{{ /if }}Hello'))
+            ->toThrow(AntlersSyntaxException::class, 'Unexpected closing tag {{ /if }}');
+    });
+
+    it('rejects a closing tag that does not match the open block', function (): void {
+        expect(fn(): array => $this->parser->parse('{{ if true }}A{{ /foreach }}'))
+            ->toThrow(
+                AntlersSyntaxException::class,
+                'Unexpected closing tag {{ /foreach }}, expected {{ /if }}',
+            );
+    });
+
+    it('rejects an unclosed block tag', function (): void {
+        expect(fn(): array => $this->parser->parse('{{ if true }}A'))
+            ->toThrow(AntlersSyntaxException::class, 'Unclosed tag {{ if }}');
+    });
+
+    it('rejects crossed block tags', function (): void {
+        expect(fn(): array => $this->parser->parse('{{ if true }}{{ foreach n as i }}a{{ /if }}b{{ /foreach }}'))
+            ->toThrow(
+                AntlersSyntaxException::class,
+                'Unexpected closing tag {{ /if }}, expected {{ /foreach }}',
+            );
+    });
+
+    it('reports the source line of a pairing error', function (): void {
+        try {
+            $this->parser->parse("Line one\n{{ if true }}A\n\n{{ /foreach }}");
+            $this->fail('Expected AntlersSyntaxException was not thrown.');
+        } catch (AntlersSyntaxException $e) {
+            expect($e->templateLine)->toBe(4);
+        }
+    });
+
+    it('does not treat a self-closing markdown tag as a block', function (): void {
+        $nodes = $this->parser->parse('{{ markdown content="**B**" }}');
 
         expect($nodes)->toHaveCount(1)
-            ->and($nodes[0])->toBeInstanceOf(LiteralNode::class)
-            ->and($nodes[0]->content)->toBe('Hello');
+            ->and($nodes[0]->children)->toBe([]);
     });
 
     it('throws a syntax exception for an unclosed antlers tag with the source line', function (): void {

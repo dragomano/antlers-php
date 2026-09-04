@@ -23,13 +23,12 @@ final class DocumentParser
 
     private int $line = 1;
 
-    /** @var AbstractNode[] */
+    /** @var list<AbstractNode> */
     private array $nodes = [];
 
     // Tags that are always block-level (require a closing {{ /tag }})
     private const BUILTIN_BLOCKS = [
         'if', 'unless', 'foreach', 'for',
-        'cache', 'markdown',
     ];
 
     // Tags that are always self-closing (never paired)
@@ -280,19 +279,18 @@ final class DocumentParser
     }
 
     /**
-     * @param  AbstractNode[] $nodes
+     * @param  list<AbstractNode> $nodes
      * @return AbstractNode[]
      */
     private function matchPairs(array $nodes): array
     {
-        // Pre-compute which simple-identifier tags have a matching closing tag
-        $pairedNames = $this->findPairedNames($nodes);
+        $pairedOpenings = $this->resolvePairedOpenings($nodes);
 
         $result = [];
         /** @var AntlersNode[] $stack */
         $stack  = [];
 
-        foreach ($nodes as $node) {
+        foreach ($nodes as $index => $node) {
             if (! ($node instanceof AntlersNode)) {
                 $this->appendNode($node, $result, $stack);
 
@@ -300,19 +298,12 @@ final class DocumentParser
             }
 
             if ($node->isClosingTag) {
-                if (empty($stack)) {
-                    // Orphaned closing tag — ignore
-                    continue;
-                }
+                $this->closeBlock($node, $stack);
 
-                $open = array_pop($stack);
-                $open->closingPair = $node;
-
-                // Children were already accumulated into $open->children
                 continue;
             }
 
-            $isBlock = $this->isBlockTag($node, $pairedNames);
+            $isBlock = $this->isBlockTag($node, isset($pairedOpenings[$index]));
 
             $this->appendNode($node, $result, $stack);
 
@@ -322,7 +313,47 @@ final class DocumentParser
             }
         }
 
+        if ($stack !== []) {
+            $unclosed = $stack[count($stack) - 1];
+
+            throw new AntlersSyntaxException(
+                sprintf('Unclosed tag {{ %s }}', $unclosed->name),
+                $unclosed->line,
+            );
+        }
+
         return $result;
+    }
+
+    /**
+     * Closes the innermost open block, which must be the one this tag names.
+     *
+     * @param AntlersNode[] $stack
+     */
+    private function closeBlock(AntlersNode $node, array &$stack): void
+    {
+        if ($stack === []) {
+            throw new AntlersSyntaxException(
+                sprintf('Unexpected closing tag {{ /%s }}', $node->name),
+                $node->line,
+            );
+        }
+
+        $open = array_pop($stack);
+
+        if ($open->name !== $node->name) {
+            throw new AntlersSyntaxException(
+                sprintf(
+                    'Unexpected closing tag {{ /%s }}, expected {{ /%s }}',
+                    $node->name,
+                    $open->name,
+                ),
+                $node->line,
+            );
+        }
+
+        // Children were already accumulated into $open->children
+        $open->closingPair = $node;
     }
 
     /**
@@ -341,65 +372,56 @@ final class DocumentParser
     }
 
     /**
-     * Scans the flat node list and returns names of tags that have a matching
-     * closing counterpart. Used to decide if a simple {{ varname }} is paired.
+     * Antlers tags are ambiguous: {{ items }} is a variable unless a matching
+     * {{ /items }} closes it. Decide that per name with the same balanced
+     * matching the main pass uses, so an occurrence closed somewhere else in
+     * the template cannot turn every occurrence of that name into a block.
      *
-     * @param  AbstractNode[] $nodes
-     * @return array<string, bool>
+     * @param  list<AbstractNode> $nodes
+     * @return array<int, true>   indices of opening nodes that have a matching close
      */
-    private function findPairedNames(array $nodes): array
+    private function resolvePairedOpenings(array $nodes): array
     {
-        $openCounts   = [];
-        $closingNames = [];
+        /** @var array<string, list<int>> $openIndexes */
+        $openIndexes = [];
+        $paired      = [];
 
-        foreach ($nodes as $node) {
+        foreach ($nodes as $index => $node) {
             if (! ($node instanceof AntlersNode)) {
                 continue;
             }
 
-            $name = $node->name;
-            if ($node->isClosingTag) {
-                $closingNames[$name] = true;
-            } else {
-                $openCounts[$name] = ($openCounts[$name] ?? 0) + 1;
-            }
-        }
+            if (! $node->isClosingTag) {
+                $openIndexes[$node->name][] = $index;
 
-        $paired = [];
-        foreach (array_keys($closingNames) as $name) {
-            if (isset($openCounts[$name])) {
-                $paired[$name] = true;
+                continue;
             }
+
+            $pending = $openIndexes[$node->name] ?? [];
+            if ($pending === []) {
+                continue;
+            }
+
+            $paired[array_pop($pending)] = true;
+
+            $openIndexes[$node->name] = $pending;
         }
 
         return $paired;
     }
 
-    /**
-     * @param array<string, bool> $pairedNames
-     */
-    private function isBlockTag(AntlersNode $node, array $pairedNames): bool
+    private function isBlockTag(AntlersNode $node, bool $hasMatchingClose): bool
     {
-        $name = $node->name;
-
         // Always block
-        if (in_array($name, self::BUILTIN_BLOCKS, strict: true)) {
+        if (in_array($node->name, self::BUILTIN_BLOCKS, strict: true)) {
             return true;
         }
 
         // Never block
-        if (in_array($name, self::ALWAYS_SELF_CLOSING, strict: true)) {
+        if (in_array($node->name, self::ALWAYS_SELF_CLOSING, strict: true)) {
             return false;
         }
 
-        // Tags with colon are block tags only when a matching closing tag exists.
-        if (str_contains($name, ':')) {
-            return isset($pairedNames[$name]);
-        }
-
-        // If there is a matching {{ /name }} anywhere, treat as block tag.
-        // This covers: simple vars {{ items }}, tags with params {{ wrap tag="p" }}.
-        // Expressions with spaces or operators and no matching close tag — self-closing
-        return isset($pairedNames[$name]) && preg_match('/^[%$]?[\w.]+$/', $name);
+        return $hasMatchingClose;
     }
 }
