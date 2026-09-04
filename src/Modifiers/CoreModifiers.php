@@ -106,13 +106,22 @@ final class CoreModifiers
         $registry->register('replace', static fn(mixed $v, array $p): string
             => str_replace(self::string($p[0] ?? ''), self::string($p[1] ?? ''), self::string($v)));
 
-        $registry->register('regex_replace', static function (mixed $v, array $p): ?string {
+        $registry->register('regex_replace', static function (mixed $v, array $p) use ($options): string {
             $pattern = self::string($p[0] ?? '');
+            $subject = self::string($v);
             if ($pattern === '') {
-                return self::string($v);
+                return $subject;
             }
 
-            return preg_replace($pattern, self::string($p[1] ?? ''), self::string($v));
+            $replaced = preg_replace($pattern, self::string($p[1] ?? ''), $subject);
+            if ($replaced === null) {
+                return $options->fail(
+                    sprintf('regex_replace failed for pattern "%s": %s', $pattern, preg_last_error_msg()),
+                    $subject,
+                );
+            }
+
+            return $replaced;
         });
 
         $registry->register('nl2br', static fn(mixed $v): string => nl2br(self::string($v)));

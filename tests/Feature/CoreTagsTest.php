@@ -276,7 +276,9 @@ it('supports loop shorthand count and start aliases', function (): void {
 });
 
 it('requires loop bounds and coerces numeric inputs from variables', function (): void {
-    expect(fn(): string => engine()->render('{{ loop }}{{ value }}{{ /loop }}'))
+    expect(engine()->render('{{ loop }}{{ value }}{{ /loop }}'))->toBe('');
+
+    expect(fn(): string => engine()->setStrictMode(true)->render('{{ loop }}{{ value }}{{ /loop }}'))
         ->toThrow(AntlersRuntimeException::class, 'Loop tag requires "times" or "to".');
 
     expect(engine()->render('{{ loop from=start to=end }}{{ value }}{{ /loop }}|{{ increment:row from=int_start by=int_step }},{{ increment:floaty from=float_start by=bool_step }},{{ increment:weird from=weird by=weird }}', [
@@ -377,10 +379,20 @@ it('returns empty for svg tags without a path or with a missing file', function 
 
 it('blocks partial path traversal outside the current template root', function (): void {
     expect(rtrim(engine()->renderFile(fixturePath('partial/security/wrapper.antlers.html'))))->toBe('');
+
+    expect(fn(): string => engine()
+        ->setStrictMode(true)
+        ->renderFile(fixturePath('partial/security/wrapper.antlers.html')))
+        ->toThrow(AntlersRuntimeException::class, 'Partial not found');
 });
 
 it('blocks svg path traversal outside the current template root', function (): void {
     expect(rtrim(engine()->renderFile(fixturePath('svg/security/template.antlers.html'))))->toBe('');
+
+    expect(fn(): string => engine()
+        ->setStrictMode(true)
+        ->renderFile(fixturePath('svg/security/template.antlers.html')))
+        ->toThrow(AntlersRuntimeException::class, 'Svg file not found: "../icon.svg"');
 });
 
 it('throws on recursive layout rendering', function (): void {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Runtime;
 
+use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\GuardPolicy;
 use Bugo\Antlers\Support\CommonMarkRenderer;
 use Bugo\Antlers\Support\MarkdownRendererInterface;
@@ -22,5 +23,25 @@ final class RuntimeOptions
     {
         $this->guardPolicy      = new GuardPolicy();
         $this->markdownRenderer = new CommonMarkRenderer();
+    }
+
+    /**
+     * Applies the lenient/strict policy to a runtime failure. Strict mode
+     * surfaces it; lenient mode returns the fallback so rendering continues.
+     *
+     * Every place that has to decide "report or carry on" goes through here, so
+     * the answer lives in one spot instead of being reinvented per call site.
+     *
+     * @template T
+     * @param  T $fallback
+     * @return T
+     */
+    public function fail(string $reason, mixed $fallback = ''): mixed
+    {
+        if ($this->strict) {
+            throw new AntlersRuntimeException($reason);
+        }
+
+        return $fallback;
     }
 }

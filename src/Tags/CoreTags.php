@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Tags;
 
-use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\LiteralNode;
 use Bugo\Antlers\Runtime\NodeProcessor;
@@ -99,7 +98,7 @@ final class CoreTags
                 : '',
             default     => $fallback !== ''
                 ? $processor->renderTemplateFile($fallback, self::partialData($params, $data, $slotData))
-                : '',
+                : $processor->fail(sprintf('Partial not found: "%s"', implode('", "', $paths))),
         };
     }
 
@@ -364,7 +363,7 @@ final class CoreTags
         }
 
         if ($to === null) {
-            throw new AntlersRuntimeException('Loop tag requires "times" or "to".');
+            return $processor->fail('Loop tag requires "times" or "to".');
         }
 
         return $processor->renderCounterLoop($from, $to, $children);
@@ -402,7 +401,7 @@ final class CoreTags
     ): string {
         $name = self::sectionName($params, $method);
         if ($name === null) {
-            return '';
+            return $processor->fail('Scope tag requires a name.');
         }
 
         return $processor->renderFragment($children, array_merge($data, [$name => $data]));
@@ -436,16 +435,12 @@ final class CoreTags
     {
         $path = self::svgPath($params);
         if (! is_string($path->value) || $path->value === '') {
-            return '';
+            return $processor->fail('Svg tag requires a "src" parameter.');
         }
 
         $resolved = $processor->resolveTemplateTagPath($path->value);
-        if ($resolved === '') {
-            return '';
-        }
-
-        if (! is_file($resolved)) {
-            return '';
+        if ($resolved === '' || ! is_file($resolved)) {
+            return $processor->fail(sprintf('Svg file not found: "%s"', $path->value));
         }
 
         $contents = file_get_contents($resolved);

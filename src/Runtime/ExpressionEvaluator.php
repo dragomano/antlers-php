@@ -90,11 +90,7 @@ final readonly class ExpressionEvaluator
     public function resolveVariable(string $path, array $scope): mixed
     {
         if ($this->options->guardPolicy->guardsVariable($path)) {
-            if ($this->options->strict) {
-                throw new AntlersRuntimeException(sprintf('Guarded variable: "%s"', $path));
-            }
-
-            return null;
+            return $this->options->fail(sprintf('Guarded variable: "%s"', $path), null);
         }
 
         if ($this->options->strict && ! $this->paths->has($path, $scope)) {

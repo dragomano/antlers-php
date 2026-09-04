@@ -46,3 +46,10 @@ it('throws a runtime exception when handling an unregistered tag', function (): 
     expect(fn(): mixed => $registry->handle('missing', 'index', [], [], bareNodeProcessor($registry)))
         ->toThrow(AntlersRuntimeException::class, 'Unknown tag: "missing"');
 });
+
+it('throws a runtime exception when applying an unregistered modifier', function (): void {
+    // The lenient/strict decision belongs to ModifierRunner; reaching the
+    // registry with an unknown name is a contract violation.
+    expect(fn(): mixed => (new ModifierRegistry())->apply('missing', 'value', [], []))
+        ->toThrow(AntlersRuntimeException::class, 'Unknown modifier: "missing"');
+});

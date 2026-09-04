@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Modifiers;
 
+use Bugo\Antlers\Exceptions\AntlersRuntimeException;
+
 final class ModifierRegistry
 {
     /** @var array<string, ModifierInterface|callable> */
@@ -25,12 +27,8 @@ final class ModifierRegistry
      */
     public function apply(string $name, mixed $value, array $params, array $context): mixed
     {
-        if (! isset($this->modifiers[$name])) {
-            // Unknown modifier — return value unchanged (lenient mode)
-            return $value;
-        }
-
-        $modifier = $this->modifiers[$name];
+        $modifier = $this->modifiers[$name]
+            ?? throw new AntlersRuntimeException(sprintf('Unknown modifier: "%s"', $name));
 
         if ($modifier instanceof ModifierInterface) {
             return $modifier->modify($value, $params, $context);

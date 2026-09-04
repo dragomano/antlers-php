@@ -493,6 +493,25 @@ echo $engine->render('{{ missing }}');
 // throws AntlersRuntimeException
 ```
 
+By default the engine is lenient: it falls back so a page still renders. Strict mode turns each
+of those fallbacks into an `AntlersRuntimeException` instead:
+
+| Situation | Lenient | Strict |
+|---|---|---|
+| Undefined variable | `''` | throws |
+| Guarded variable, tag or modifier | `''` / value unchanged | throws |
+| Unknown tag | `''` | throws |
+| Unknown modifier | value unchanged | throws |
+| `{{ loop }}` without `times`/`to` | `''` | throws |
+| `{{ scope }}` without a name | `''` | throws |
+| `{{ svg }}` without `src`, or a missing file | `''` | throws |
+| `{{ partial }}` resolving outside the template roots | `''` | throws |
+| `regex_replace` with a failing pattern | subject unchanged | throws |
+
+`??` and `???` never throw for an undefined left side, in either mode. The `dump` tag is not
+affected either: an empty result there means debug mode is off, which is a setting rather than
+a failure.
+
 ### Debug Mode
 
 The `dump` tag stays silent while debug mode is off, so a stray `{{ dump }}` cannot leak the

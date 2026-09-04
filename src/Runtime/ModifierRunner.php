@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Runtime;
 
-use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\Modifiers\ModifierRegistry;
 
 /**
@@ -25,11 +24,11 @@ final readonly class ModifierRunner
     public function apply(string $name, mixed $value, array $params, array $context): mixed
     {
         if ($this->options->guardPolicy->guardsModifier($name)) {
-            if ($this->options->strict) {
-                throw new AntlersRuntimeException(sprintf('Guarded modifier: "%s"', $name));
-            }
+            return $this->options->fail(sprintf('Guarded modifier: "%s"', $name), $value);
+        }
 
-            return $value;
+        if (! $this->registry->has($name)) {
+            return $this->options->fail(sprintf('Unknown modifier: "%s"', $name), $value);
         }
 
         return $this->registry->apply($name, $value, $params, $context);

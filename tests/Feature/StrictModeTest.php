@@ -78,8 +78,35 @@ it('returns the original value for an unknown modifier in lenient mode', functio
     expect(engine()->render('{{ name | missing_modifier }}', ['name' => 'Alice']))->toBe('Alice');
 });
 
-it('returns the original value for an unknown modifier in strict mode', function (): void {
-    expect(strictEngine()->render('{{ name | missing_modifier }}', ['name' => 'Alice']))->toBe('Alice');
+it('throws for an unknown modifier in strict mode', function (): void {
+    expect(fn(): string => strictEngine()->render('{{ name | missing_modifier }}', ['name' => 'Alice']))
+        ->toThrow(AntlersRuntimeException::class, 'Unknown modifier: "missing_modifier"');
+});
+
+it('throws for a scope tag without a name in strict mode', function (): void {
+    expect(engine()->render('{{ scope }}{{ title }}{{ /scope }}', ['title' => 'Home']))->toBe('');
+
+    expect(fn(): string => strictEngine()->render('{{ scope }}{{ title }}{{ /scope }}', ['title' => 'Home']))
+        ->toThrow(AntlersRuntimeException::class, 'Scope tag requires a name.');
+});
+
+it('throws for an svg tag without a src in strict mode', function (): void {
+    expect(engine()->render('{{ svg }}'))->toBe('');
+
+    expect(fn(): string => strictEngine()->render('{{ svg }}'))
+        ->toThrow(AntlersRuntimeException::class, 'Svg tag requires a "src" parameter.');
+});
+
+it('keeps the subject and reports a failed regex_replace', function (): void {
+    // Backtrack limit rather than a bad pattern: same branch, no PHP warning
+    $tpl     = '{{ text | regex_replace:"/^(a+)+$/":"y" }}';
+    $subject = str_repeat('a', 30) . 'b';
+
+    // A failed pattern must never silently blank the value out
+    expect(engine()->render($tpl, ['text' => $subject]))->toBe($subject);
+
+    expect(fn(): string => strictEngine()->render($tpl, ['text' => $subject]))
+        ->toThrow(AntlersRuntimeException::class, 'regex_replace failed for pattern "/^(a+)+$/"');
 });
 
 it('can disable strict mode after enabling it', function (): void {

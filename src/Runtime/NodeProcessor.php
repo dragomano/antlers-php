@@ -105,6 +105,19 @@ final class NodeProcessor
     }
 
     /**
+     * Reports a runtime failure according to the lenient/strict policy.
+     * Tags use this instead of deciding for themselves.
+     *
+     * @template T
+     * @param  T $fallback
+     * @return T
+     */
+    public function fail(string $reason, mixed $fallback = ''): mixed
+    {
+        return $this->options->fail($reason, $fallback);
+    }
+
+    /**
      * Render a list of nodes with the given data scope.
      *
      * @param AbstractNode[] $nodes
@@ -438,19 +451,11 @@ final class NodeProcessor
     private function processTag(TagNode $node, array $scope): string
     {
         if (! $this->tags->has($node->name)) {
-            if ($this->options->strict) {
-                throw new AntlersRuntimeException(sprintf('Unknown tag: "%s"', $node->name));
-            }
-
-            return '';
+            return $this->options->fail(sprintf('Unknown tag: "%s"', $node->name));
         }
 
         if ($this->options->guardPolicy->guardsTag($node->name)) {
-            if ($this->options->strict) {
-                throw new AntlersRuntimeException(sprintf('Guarded tag: "%s"', $node->name));
-            }
-
-            return '';
+            return $this->options->fail(sprintf('Guarded tag: "%s"', $node->name));
         }
 
         // Resolve parameter values
