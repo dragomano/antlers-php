@@ -21,6 +21,7 @@ use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Nodes\VariableNode;
 use Bugo\Antlers\Parser\DocumentParser;
 use Bugo\Antlers\Parser\LanguageParser;
+use Bugo\Antlers\Support\MarkdownRendererInterface;
 use Bugo\Antlers\Tags\TagRegistry;
 use Traversable;
 
@@ -91,6 +92,16 @@ final class NodeProcessor
             trim(...),
             $paths,
         ), static fn(string $path): bool => $path !== ''));
+    }
+
+    public function markdownRenderer(): MarkdownRendererInterface
+    {
+        return $this->options->markdownRenderer;
+    }
+
+    public function isDebugEnabled(): bool
+    {
+        return $this->options->debug;
     }
 
     /**
@@ -664,9 +675,7 @@ final class NodeProcessor
 
     public function storeStack(string $name, string $content, bool $prepend = false): void
     {
-        if (! isset($this->stacks[$name])) {
-            $this->stacks[$name] = [];
-        }
+        $this->stacks[$name] ??= [];
 
         if ($prepend) {
             array_unshift($this->stacks[$name], $content);

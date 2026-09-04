@@ -260,7 +260,7 @@ it('handles markdown indent blocks with blank lines and with no shared indentati
 No indent
 {{ /markdown:indent }}';
 
-    expect(engine()->render($tpl))->toBe('<p>First</p><p>Second</p>|<p>No indent</p>');
+    expect(engine()->render($tpl))->toBe("<p>First</p>\n<p>Second</p>|<p>No indent</p>");
 });
 
 it('supports loop tag', function (): void {
@@ -320,14 +320,28 @@ it('returns empty for unnamed scope tags', function (): void {
 });
 
 it('supports dump tag', function (): void {
-    $output = engine()->render('{{ dump value=user }}', ['user' => ['name' => 'Alice']]);
+    $output = engine()->setDebug(true)->render('{{ dump value=user }}', ['user' => ['name' => 'Alice']]);
 
     expect($output)->toContain('<pre>')
         ->and($output)->toContain('&apos;name&apos; =&gt; &apos;Alice&apos;');
 });
 
+it('dumps the current scope when no value is given', function (): void {
+    $output = engine()->setDebug(true)->render('{{ dump }}', ['user' => 'Alice']);
+
+    expect($output)->toContain('&apos;user&apos; =&gt; &apos;Alice&apos;');
+});
+
+it('dumps the iteration scope inside a loop', function (): void {
+    $output = engine()->setDebug(true)->render('{{ items }}{{ dump }}{{ /items }}', [
+        'items' => [['sku' => 'a-1']],
+    ]);
+
+    expect($output)->toContain('&apos;sku&apos; =&gt; &apos;a-1&apos;');
+});
+
 it('escapes dumped values so they cannot break out of the pre block', function (): void {
-    $output = engine()->render('{{ dump value=payload }}', [
+    $output = engine()->setDebug(true)->render('{{ dump value=payload }}', [
         'payload' => '</pre><script>alert(1)</script>',
     ]);
 
@@ -335,8 +349,17 @@ it('escapes dumped values so they cannot break out of the pre block', function (
         ->and($output)->toContain('&lt;script&gt;');
 });
 
-it('returns empty for a dump tag without a value', function (): void {
-    expect(engine()->render('{{ dump }}', ['api_key' => 'secret']))->toBe('');
+it('stays silent while debug mode is off', function (): void {
+    expect(engine()->render('{{ dump }}', ['api_key' => 'secret']))->toBe('')
+        ->and(engine()->render('{{ dump value=api_key }}', ['api_key' => 'secret']))->toBe('');
+});
+
+it('dumps regardless of debug mode when forced', function (): void {
+    expect(engine()->render('{{ dump force="true" value=name }}', ['name' => 'Alice']))
+        ->toContain('&apos;Alice&apos;')
+        ->and(engine()->render('{{ dump force="false" value=name }}', ['name' => 'Alice']))->toBe('')
+        ->and(engine()->render('{{ dump force=true value=name }}', ['name' => 'Alice']))
+        ->toContain('&apos;Alice&apos;');
 });
 
 it('supports svg tag', function (): void {

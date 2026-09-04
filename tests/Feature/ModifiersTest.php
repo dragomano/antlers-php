@@ -210,7 +210,7 @@ it('applies markdown modifier', function (): void {
 it('returns an empty string for blank markdown and skips whitespace-only blocks', function (): void {
     expect(engine()->render('{{ text | markdown }}', ['text' => " \n\t "]))->toBe('')
         ->and(engine()->render('{{ text | markdown }}', ['text' => "First\n\n   \n\nSecond"]))
-        ->toBe('<p>First</p><p>Second</p>');
+        ->toBe("<p>First</p>\n<p>Second</p>");
 });
 
 it('applies wrap modifier', function (): void {

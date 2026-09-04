@@ -5,11 +5,12 @@ declare(strict_types=1);
 use Bugo\Antlers\Modifiers\CoreModifiers;
 use Bugo\Antlers\Modifiers\ModifierInterface;
 use Bugo\Antlers\Modifiers\ModifierRegistry;
+use Bugo\Antlers\Runtime\RuntimeOptions;
 
 function coreModifierRegistry(): ModifierRegistry
 {
     $registry = new ModifierRegistry();
-    CoreModifiers::register($registry);
+    CoreModifiers::register($registry, new RuntimeOptions());
 
     return $registry;
 }

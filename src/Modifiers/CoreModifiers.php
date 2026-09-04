@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Bugo\Antlers\Modifiers;
 
 use ArrayAccess;
+use Bugo\Antlers\Runtime\RuntimeOptions;
 use Bugo\Antlers\Runtime\ValueResult;
-use Bugo\Antlers\Support\MarkdownRenderer;
 use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\String\UnicodeString;
 use Traversable;
@@ -16,7 +16,7 @@ use Traversable;
  */
 final class CoreModifiers
 {
-    public static function register(ModifierRegistry $registry): void
+    public static function register(ModifierRegistry $registry, RuntimeOptions $options): void
     {
         $registry->register('upper', static fn(mixed $v): string => self::unicode($v)->upper()->toString());
 
@@ -129,7 +129,8 @@ final class CoreModifiers
         $registry->register('decode', static fn(mixed $v): string
             => htmlspecialchars_decode(self::string($v), ENT_QUOTES | ENT_HTML5));
 
-        $registry->register('markdown', static fn(mixed $v): string => MarkdownRenderer::render(self::string($v)));
+        $registry->register('markdown', static fn(mixed $v): string
+            => $options->markdownRenderer->render(self::string($v)));
 
         $registry->register('wrap', static function (mixed $v, array $p): string {
             $tag = self::string($p[0] ?? 'span');

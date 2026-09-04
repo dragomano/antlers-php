@@ -15,6 +15,7 @@ use Bugo\Antlers\Runtime\ModifierRunner;
 use Bugo\Antlers\Runtime\NodeProcessor;
 use Bugo\Antlers\Runtime\PathDataManager;
 use Bugo\Antlers\Runtime\RuntimeOptions;
+use Bugo\Antlers\Support\MarkdownRendererInterface;
 use Bugo\Antlers\Tags\CoreTags;
 use Bugo\Antlers\Tags\TagInterface;
 use Bugo\Antlers\Tags\TagRegistry;
@@ -41,11 +42,11 @@ final class Engine
         private readonly TagRegistry $tagRegistry = new TagRegistry(),
         private readonly ModifierRegistry $modifierRegistry = new ModifierRegistry(),
     ) {
-        // Register built-in modifiers
-        CoreModifiers::register($this->modifierRegistry);
-        CoreTags::register($this->tagRegistry);
-
         $this->runtimeOptions = new RuntimeOptions();
+
+        // Register built-in modifiers
+        CoreModifiers::register($this->modifierRegistry, $this->runtimeOptions);
+        CoreTags::register($this->tagRegistry);
 
         // Build the runtime pipeline
         $paths      = new PathDataManager();
@@ -173,9 +174,31 @@ final class Engine
         return $this;
     }
 
+    /**
+     * Enables debug output. The dump tag stays silent while this is off,
+     * so wire it to your own APP_DEBUG equivalent.
+     */
+    public function setDebug(bool $debug): self
+    {
+        $this->runtimeOptions->debug = $debug;
+
+        return $this;
+    }
+
     public function setGuardPolicy(GuardPolicy $policy): self
     {
         $this->runtimeOptions->guardPolicy = $policy;
+
+        return $this;
+    }
+
+    /**
+     * Replace the renderer used by the markdown tag and modifier.
+     * Defaults to CommonMarkRenderer.
+     */
+    public function setMarkdownRenderer(MarkdownRendererInterface $renderer): self
+    {
+        $this->runtimeOptions->markdownRenderer = $renderer;
 
         return $this;
     }

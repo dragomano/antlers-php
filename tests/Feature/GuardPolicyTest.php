@@ -56,9 +56,11 @@ it('treats guarded variables as null on the left side of ?? in strict mode', fun
 });
 
 it('returns an empty string for guarded tags in lenient mode', function (): void {
-    $engine = engine()->setGuardPolicy(new GuardPolicy(
-        tags: ['dump'],
-    ));
+    $engine = engine()
+        ->setDebug(true)
+        ->setGuardPolicy(new GuardPolicy(
+            tags: ['dump'],
+        ));
 
     expect($engine->render('{{ dump value=name }}', ['name' => 'Alice']))->toBe('');
 });
@@ -66,6 +68,7 @@ it('returns an empty string for guarded tags in lenient mode', function (): void
 it('throws for guarded tags in strict mode', function (): void {
     $engine = engine()
         ->setStrictMode(true)
+        ->setDebug(true)
         ->setGuardPolicy(new GuardPolicy(
             tags: ['dump'],
         ));

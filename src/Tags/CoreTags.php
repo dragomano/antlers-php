@@ -9,7 +9,6 @@ use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\LiteralNode;
 use Bugo\Antlers\Runtime\NodeProcessor;
 use Bugo\Antlers\Runtime\ValueResult;
-use Bugo\Antlers\Support\MarkdownRenderer;
 
 final class CoreTags
 {
@@ -288,7 +287,51 @@ final class CoreTags
             ? $processor->renderFragment($children, $data)
             : self::string($params['text'] ?? $params['content'] ?? '');
 
-        return MarkdownRenderer::render($content, $method === 'indent');
+        if ($method === 'indent') {
+            $content = self::trimSharedIndentation($content);
+        }
+
+        return $processor->markdownRenderer()->render($content);
+    }
+
+    /**
+     * Removes the indentation an indented {{ markdown:indent }} block inherits
+     * from the surrounding template. Without it CommonMark would read the body
+     * as an indented code block.
+     */
+    private static function trimSharedIndentation(string $markdown): string
+    {
+        $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $markdown));
+
+        while ($lines !== [] && trim($lines[0]) === '') {
+            array_shift($lines);
+        }
+
+        while ($lines !== [] && trim($lines[count($lines) - 1]) === '') {
+            array_pop($lines);
+        }
+
+        $indent = null;
+
+        foreach ($lines as $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+
+            preg_match('/^[ \t]*/', $line, $matches);
+
+            $lineIndent = strlen($matches[0] ?? '');
+            $indent     = $indent === null ? $lineIndent : min($indent, $lineIndent);
+        }
+
+        if ($indent === null || $indent === 0) {
+            return implode("\n", $lines);
+        }
+
+        return implode("\n", array_map(
+            static fn(string $line): string => trim($line) === '' ? '' : substr($line, $indent),
+            $lines,
+        ));
     }
 
     /**
@@ -366,15 +409,21 @@ final class CoreTags
     }
 
     /**
+     * Debug helper: dumps the current scope, or an explicit value.
+     *
+     * Output is suppressed unless debug mode is on, mirroring Statamic's
+     * APP_DEBUG gate. Use force="true" to dump regardless.
+     *
      * @param array<string, mixed> $params
+     * @param array<string, mixed> $data
      */
-    private static function dumpTag(array $params): string
+    private static function dumpTag(array $params, array $data, NodeProcessor $processor): string
     {
-        if (! array_key_exists('value', $params) && ! array_key_exists('var', $params)) {
+        if (! $processor->isDebugEnabled() && ! self::bool($params['force'] ?? false)) {
             return '';
         }
 
-        $exported = var_export($params['value'] ?? $params['var'] ?? null, true);
+        $exported = var_export($params['value'] ?? $params['var'] ?? $data, true);
 
         return '<pre>' . htmlspecialchars($exported, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</pre>';
     }
@@ -678,6 +727,19 @@ final class CoreTags
         }
 
         return 0;
+    }
+
+    /**
+     * Quoted parameters are the common case in HTML-ish templates, so the
+     * usual falsy spellings have to be recognised as strings.
+     */
+    private static function bool(mixed $value): bool
+    {
+        if (is_string($value)) {
+            return ! in_array(strtolower(trim($value)), ['', '0', 'false', 'no', 'off'], strict: true);
+        }
+
+        return (bool) $value;
     }
 
     /**

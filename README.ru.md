@@ -47,6 +47,10 @@ echo $engine->render('Привет, {{ name }}!', ['name' => 'мир']);
 
 Считайте обычный вывод `{{ ... }}` сырым выводом шаблона, если вы не применили экранирование самостоятельно.
 
+Исключение — тег и модификатор `markdown`: они предназначены для обработки недоверенного текста,
+поэтому сырой HTML в исходнике экранируется, а небезопасные схемы ссылок отбрасываются.
+См. [Рендерер Markdown](#рендерер-markdown).
+
 ## Синтаксис
 
 ### Переменные
@@ -453,4 +457,52 @@ echo $engine->render('{{ name }}', ['name' => 'Алиса']);
 
 echo $engine->render('{{ missing }}');
 // выбросит AntlersRuntimeException
+```
+
+### Режим отладки
+
+Тег `dump` молчит, пока режим отладки выключен, — так забытый в шаблоне `{{ dump }}` не сможет
+раскрыть содержимое scope в продакшене. Свяжите его со своим аналогом `APP_DEBUG`:
+
+```php
+$engine->setDebug(true);
+
+echo $engine->render('{{ dump }}');            // выведет текущий scope
+echo $engine->render('{{ dump value=user }}'); // выведет одно значение
+```
+
+Внутри цикла выводится scope текущей итерации. Параметр `force="true"` игнорирует настройку:
+
+```antlers
+{{ dump force="true" value=user }}
+```
+
+### Рендерер Markdown
+
+`markdown` — и тег, и модификатор — рендерится через
+[league/commonmark](https://commonmark.thephpleague.com), тот же парсер, что используется в
+Statamic, поэтому вывод совпадёт для шаблонов, перенесённых из Statamic.
+
+Свой рендерер подключается через `MarkdownRendererInterface`:
+
+```php
+use Bugo\Antlers\Support\MarkdownRendererInterface;
+
+$engine->setMarkdownRenderer(new class implements MarkdownRendererInterface {
+    public function render(string $markdown): string
+    {
+        return my_own_parser($markdown);
+    }
+});
+```
+
+Чтобы оставить CommonMark, но изменить его настройки, передайте конвертер в `CommonMarkRenderer`:
+
+```php
+use Bugo\Antlers\Support\CommonMarkRenderer;
+use League\CommonMark\CommonMarkConverter;
+
+$engine->setMarkdownRenderer(new CommonMarkRenderer(
+    new CommonMarkConverter(['html_input' => 'escape', 'max_nesting_level' => 10]),
+));
 ```

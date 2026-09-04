@@ -21,7 +21,7 @@ it('prefers a simple tag over a same-named variable by default', function (): vo
 
 it('calls a namespaced tag method', function (): void {
     $e = engine();
-    $e->addTag('my', fn($params, $data, $proc, $method) => match ($method) {
+    $e->addTag('my', fn($params, $data, $proc, $method): string => match ($method) {
         'upper' => strtoupper($params['value'] ?? ''),
         'lower' => strtolower($params['value'] ?? ''),
         default => '',

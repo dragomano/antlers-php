@@ -36,11 +36,12 @@ function nodeProcessor(bool $strict = false, ?GuardPolicy $guardPolicy = null): 
     $modifiers      = new ModifierRegistry();
 
     CoreTags::register($tagRegistry);
-    CoreModifiers::register($modifiers);
 
     $options              = new RuntimeOptions();
     $options->strict      = $strict;
     $options->guardPolicy = $guardPolicy ?? new GuardPolicy();
+
+    CoreModifiers::register($modifiers, $options);
 
     $paths      = new PathDataManager();
     $runner     = new ModifierRunner($modifiers, $options);
@@ -66,11 +67,13 @@ function nodeProcessorWithTag(string $name, callable $handler): NodeProcessor
     $modifiers      = new ModifierRegistry();
 
     CoreTags::register($tagRegistry);
-    CoreModifiers::register($modifiers);
     $tagRegistry->register($name, $handler);
 
     $options    = new RuntimeOptions();
     $paths      = new PathDataManager();
+
+    CoreModifiers::register($modifiers, $options);
+
     $runner     = new ModifierRunner($modifiers, $options);
     $evaluator  = new ExpressionEvaluator($paths, $runner, $options);
     $conditions = new ConditionProcessor($evaluator);

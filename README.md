@@ -47,6 +47,10 @@ When rendering user-provided content into HTML, explicitly escape it with `sanit
 
 Treat plain `{{ ... }}` output as raw template output unless you have applied the escaping yourself.
 
+The `markdown` tag and modifier are the exception: they are the designated transform for
+untrusted prose, so raw HTML in the source is escaped and unsafe link schemes are dropped.
+See [Markdown Renderer](#markdown-renderer).
+
 ## Syntax
 
 ### Variables
@@ -453,4 +457,52 @@ echo $engine->render('{{ name }}', ['name' => 'Alice']);
 
 echo $engine->render('{{ missing }}');
 // throws AntlersRuntimeException
+```
+
+### Debug Mode
+
+The `dump` tag stays silent while debug mode is off, so a stray `{{ dump }}` cannot leak the
+template scope in production. Wire it to your own `APP_DEBUG` equivalent:
+
+```php
+$engine->setDebug(true);
+
+echo $engine->render('{{ dump }}');            // dumps the current scope
+echo $engine->render('{{ dump value=user }}'); // dumps a single value
+```
+
+Inside a loop it dumps that iteration's scope. Use `force="true"` to dump regardless of the setting:
+
+```antlers
+{{ dump force="true" value=user }}
+```
+
+### Markdown Renderer
+
+`markdown` — both the tag and the modifier — is rendered by
+[league/commonmark](https://commonmark.thephpleague.com), the same parser Statamic uses, so
+output matches for templates moved over from Statamic.
+
+Swap in your own renderer by implementing `MarkdownRendererInterface`:
+
+```php
+use Bugo\Antlers\Support\MarkdownRendererInterface;
+
+$engine->setMarkdownRenderer(new class implements MarkdownRendererInterface {
+    public function render(string $markdown): string
+    {
+        return my_own_parser($markdown);
+    }
+});
+```
+
+To keep CommonMark but change its configuration, pass a converter to `CommonMarkRenderer`:
+
+```php
+use Bugo\Antlers\Support\CommonMarkRenderer;
+use League\CommonMark\CommonMarkConverter;
+
+$engine->setMarkdownRenderer(new CommonMarkRenderer(
+    new CommonMarkConverter(['html_input' => 'escape', 'max_nesting_level' => 10]),
+));
 ```
