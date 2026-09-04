@@ -63,8 +63,10 @@ describe('Lexer', function (): void {
             ->and($this->lexer->tokenize('not')[0]->type)->toBe(TokenType::Not);
     });
 
-    it('tokenizes null coalesce operator', function (): void {
-        expect($this->lexer->tokenize('??')[0]->type)->toBe(TokenType::QQ);
+    it('tokenizes coalescing operators, longest match first', function (): void {
+        expect($this->lexer->tokenize('??')[0]->type)->toBe(TokenType::QQ)
+            ->and($this->lexer->tokenize('???')[0]->type)->toBe(TokenType::QQQ)
+            ->and($this->lexer->tokenize('???'))->toHaveCount(2);
     });
 
     it('tokenizes gatekeeper operator', function (): void {

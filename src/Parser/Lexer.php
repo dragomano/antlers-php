@@ -90,6 +90,12 @@ final class Lexer
                 continue;
             }
 
+            if ($this->tryRead('???')) {
+                $this->add(TokenType::QQQ, '???');
+
+                continue;
+            }
+
             if ($this->tryRead('==')) {
                 $this->add(TokenType::EqEq, '==');
 

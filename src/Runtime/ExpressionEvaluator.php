@@ -22,6 +22,7 @@ use Bugo\Antlers\Nodes\NumberNode;
 use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\StringValueNode;
 use Bugo\Antlers\Nodes\TernaryNode;
+use Bugo\Antlers\Nodes\TruthyCoalesceNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
 use Bugo\Antlers\Nodes\VariableNode;
 use Bugo\Antlers\Nodes\VoidNode;
@@ -58,6 +59,7 @@ final readonly class ExpressionEvaluator
             $node instanceof TernaryNode             => $this->evalTernary($node, $scope, $assignmentWriter),
             $node instanceof GatekeeperNode          => $this->evalGatekeeper($node, $scope, $assignmentWriter),
             $node instanceof NullCoalesceNode        => $this->evalNullCoalesce($node, $scope, $assignmentWriter),
+            $node instanceof TruthyCoalesceNode      => $this->evalTruthyCoalesce($node, $scope, $assignmentWriter),
             $node instanceof ModifierChainNode       => $this->evalModifierChain($node, $scope, $assignmentWriter),
             $node instanceof CollectionOperationNode => $this->evalCollectionOperation($node, $scope, $assignmentWriter),
             default                                  => throw new AntlersRuntimeException(
@@ -240,22 +242,49 @@ final readonly class ExpressionEvaluator
     }
 
     /**
+     * `??` — falls back whenever the left side is falsy, using the same
+     * truthiness rules as {{ if }}.
+     *
+     * @param array<string, mixed> $scope
+     */
+    private function evalTruthyCoalesce(TruthyCoalesceNode $node, array $scope, ?callable $assignmentWriter = null): mixed
+    {
+        $left = $this->evaluateOptional($node->left, $scope, $assignmentWriter);
+
+        return $this->isTruthy($left->value)
+            ? $left->value
+            : $this->evaluate($node->right, $scope, $assignmentWriter);
+    }
+
+    /**
+     * `???` — falls back only on null, so 0, false and '' survive.
+     *
      * @param array<string, mixed> $scope
      */
     private function evalNullCoalesce(NullCoalesceNode $node, array $scope, ?callable $assignmentWriter = null): mixed
     {
-        // Temporarily disable strict for the left-hand side — ?? is an explicit safe-access
-        $prev = $this->options->strict;
+        return $this->evaluateOptional($node->left, $scope, $assignmentWriter)->value
+            ?? $this->evaluate($node->right, $scope, $assignmentWriter);
+    }
+
+    /**
+     * Evaluates the left side of a coalescing operator. Both operators are an
+     * explicit "use it if it is there", so an undefined variable must not throw
+     * even in strict mode.
+     *
+     * @param array<string, mixed> $scope
+     */
+    private function evaluateOptional(AbstractNode $node, array $scope, ?callable $assignmentWriter = null): ValueResult
+    {
+        $previous = $this->options->strict;
 
         $this->options->strict = false;
 
         try {
-            $left = $this->evaluateResult($node->left, $scope, $assignmentWriter);
+            return $this->evaluateResult($node, $scope, $assignmentWriter);
         } finally {
-            $this->options->strict = $prev;
+            $this->options->strict = $previous;
         }
-
-        return $left->value ?? $this->evaluate($node->right, $scope, $assignmentWriter);
     }
 
     /**
@@ -733,13 +762,11 @@ final readonly class ExpressionEvaluator
      */
     private function appendGroupedItem(?array $group, array $groupKey, mixed $item): array
     {
-        if ($group === null) {
-            $group = [
-                'key'    => count($groupKey) === 1 ? reset($groupKey) : $groupKey,
-                'fields' => $groupKey,
-                'values' => [],
-            ];
-        }
+        $group ??= [
+            'key'    => count($groupKey) === 1 ? reset($groupKey) : $groupKey,
+            'fields' => $groupKey,
+            'values' => [],
+        ];
 
         $group['values'] = array_merge($group['values'], [$item]);
 

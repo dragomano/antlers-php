@@ -18,6 +18,7 @@ use Bugo\Antlers\Nodes\SetNode;
 use Bugo\Antlers\Nodes\StringValueNode;
 use Bugo\Antlers\Nodes\TagNode;
 use Bugo\Antlers\Nodes\TernaryNode;
+use Bugo\Antlers\Nodes\TruthyCoalesceNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
 use Bugo\Antlers\Nodes\VariableNode;
 use Bugo\Antlers\Nodes\VoidNode;
@@ -39,13 +40,25 @@ describe('LanguageParser', function (): void {
         $this->languageParser = new LanguageParser();
     });
 
-    it('parses modifier chains after null coalescing', function (): void {
+    it('parses modifier chains after truthy coalescing', function (): void {
         $node = $this->languageParser->parseExpression('name ?? "guest" | upper');
 
         expect($node)->toBeInstanceOf(ModifierChainNode::class)
-            ->and($node->value)->toBeInstanceOf(NullCoalesceNode::class)
+            ->and($node->value)->toBeInstanceOf(TruthyCoalesceNode::class)
             ->and($node->modifiers)->toHaveCount(1)
             ->and($node->modifiers[0]->name)->toBe('upper');
+    });
+
+    it('tells the two coalescing operators apart', function (): void {
+        expect($this->languageParser->parseExpression('a ?? b'))->toBeInstanceOf(TruthyCoalesceNode::class)
+            ->and($this->languageParser->parseExpression('a ??? b'))->toBeInstanceOf(NullCoalesceNode::class);
+    });
+
+    it('parses coalescing operators right to left', function (): void {
+        $node = $this->languageParser->parseExpression('a ?? b ??? c');
+
+        expect($node)->toBeInstanceOf(TruthyCoalesceNode::class)
+            ->and($node->right)->toBeInstanceOf(NullCoalesceNode::class);
     });
 
     it('parses modifier chains inside ternary branches', function (): void {

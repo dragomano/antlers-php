@@ -52,11 +52,12 @@ enum TokenType: string
     case Xor = 'T_XOR'; // xor
     case Not = 'T_NOT'; // ! or 'not'
 
-    // Assignment / null coalesce
+    // Assignment / coalesce
     case Equals   = 'T_EQUALS';   // =
     case Question = 'T_QUESTION'; // ?
     case QEquals  = 'T_QEQUALS';  // ?=
-    case QQ       = 'T_QQ';       // ??
+    case QQ       = 'T_QQ';       // ??  falls back on any falsy value
+    case QQQ      = 'T_QQQ';      // ??? falls back only on null
 
     // Grouping and array access
     case LParen   = 'T_LPAREN';   // (

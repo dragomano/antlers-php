@@ -29,6 +29,7 @@ use Bugo\Antlers\Nodes\SetNode;
 use Bugo\Antlers\Nodes\StringValueNode;
 use Bugo\Antlers\Nodes\TagNode;
 use Bugo\Antlers\Nodes\TernaryNode;
+use Bugo\Antlers\Nodes\TruthyCoalesceNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
 use Bugo\Antlers\Nodes\VariableNode;
 use Bugo\Antlers\Nodes\VoidNode;
@@ -702,13 +703,15 @@ final class LanguageParser
                 break;
             }
 
-            // Null coalesce — right-associative
+            // Coalescing operators — right-associative
             $this->advance();
 
-            if ($op->is(TokenType::QQ)) {
-
+            if ($op->is(TokenType::QQ, TokenType::QQQ)) {
                 $right = $this->parseExpr($bp - 1);
-                $left  = new NullCoalesceNode($left, $right);
+
+                $left = $op->is(TokenType::QQ)
+                    ? new TruthyCoalesceNode($left, $right)
+                    : new NullCoalesceNode($left, $right);
 
                 continue;
             }
@@ -1257,7 +1260,7 @@ final class LanguageParser
     private function infixBp(Token $token): ?int
     {
         return match (true) {
-            $token->is(TokenType::QQ) => 1,  // ??  right-assoc
+            $token->is(TokenType::QQ, TokenType::QQQ) => 1,  // ?? ???  right-assoc
             $token->is(TokenType::Or, TokenType::Xor) => 2,  // ||, xor
             $token->is(TokenType::And) => 3,  // &&
             $token->is(

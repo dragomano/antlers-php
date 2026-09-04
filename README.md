@@ -64,12 +64,27 @@ See [Markdown Renderer](#markdown-renderer).
 
 `items[key]` uses the current scope variable `key` as the index. For a literal key, use dot notation: `{{ items.key }}`.
 
-### Null Coalescing and Ternary Operator
+### Coalescing and Ternary Operator
 
 ```antlers
 {{ name ?? "Guest" }}
+{{ power_level ??? "It's over 9000!" }}
 {{ logged_in ? "Welcome back" : "Please log in" }}
 ```
+
+`??` falls back whenever the left side is *falsy*, using the same truthiness rules as `{{ if }}`:
+`null`, `false`, `''`, `'0'`, `0`, `0.0` and empty arrays all take the fallback. This matches
+Statamic, where `??` is documented as returning the first value that passes a truthy check.
+
+`???` falls back only on `null`, so `0`, `false` and `''` survive:
+
+```antlers
+{{ v ?? "fallback" }}   {{# v = 0 → fallback #}}
+{{ v ??? "fallback" }}  {{# v = 0 → 0 #}}
+```
+
+Neither operator throws for an undefined left side, even in strict mode — both are an explicit
+"use it if it is there".
 
 ### Arithmetic and Strings
 
