@@ -22,13 +22,13 @@ final class Lexer
 
     private int $baseLine = 1;
 
-    /** @var Token[] */
+    /** @var list<Token> */
     private array $tokens = [];
 
     /**
-     * @param  int     $baseLine template line the fragment starts on, so token
-     *                           positions can be reported against the template
-     * @return Token[]
+     * @param  int         $baseLine template line the fragment starts on, so token
+     *                               positions can be reported against the template
+     * @return list<Token>
      */
     public function tokenize(string $input, int $baseLine = 1): array
     {

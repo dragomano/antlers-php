@@ -81,3 +81,37 @@ it('nests blocks that share a name', function (): void {
 it('pairs a block and leaves a later unpaired occurrence as a variable', function (): void {
     expect(engine()->render('{{ items }}A{{ /items }}|{{ items }}', ['items' => 'X']))->toBe('A|X');
 });
+
+/*
+ * An interpolated string is parsed with a nested token stream. That stream must
+ * not be left in place, or the rest of the surrounding expression is read from
+ * it and silently discarded at its end.
+ */
+
+it('keeps parsing the expression around an interpolated string', function (): void {
+    $data = ['name' => 'bob', 'x' => 1, 'n' => 'x'];
+
+    expect(engine()->render('{{ "Hi {name}!" | upper }}', $data))->toBe('HI BOB!')
+        ->and(engine()->render('{{ "a{x}" . "-tail" }}', $data))->toBe('a1-tail')
+        ->and(engine()->render('{{ "a{x}" == "a1" }}', $data))->toBe('true')
+        ->and(engine()->render('{{ "{x}" ? "Y" : "N" }}', $data))->toBe('Y')
+        ->and(engine()->render('{{ ("hi {n}") . "!" }}', $data))->toBe('hi x!')
+        ->and(engine()->render('{{ "{name}" | upper | trim }}', $data))->toBe('BOB');
+});
+
+it('keeps parsing around an interpolated string inside blocks', function (): void {
+    expect(engine()->render('{{ if "{x}" == "1" }}Y{{ else }}N{{ /if }}', ['x' => 1]))->toBe('Y')
+        ->and(engine()->render('{{ items }}{{ "v={value}" | upper }};{{ /items }}', ['items' => ['a', 'b']]))
+        ->toBe('V=A;V=B;');
+});
+
+it('keeps collection operators working alongside nested streams', function (): void {
+    $items = [['t' => 'a', 'n' => 1], ['t' => 'b', 'n' => 2], ['t' => 'a', 'n' => 3]];
+
+    expect(engine()->render('{{ res = items groupby (t) }}{{ res }}{{ key }}:{{ values }}{{ n }}{{ /values }};{{ /res }}', [
+        'items' => $items,
+    ]))->toBe('a:13;b:2;')
+        ->and(engine()->render('{{ items take (2) | pluck:"n" | join:"," }}', ['items' => $items]))->toBe('1,2')
+        ->and(engine()->render('{{ res = items where (n > 1) }}{{ res }}{{ n }},{{ /res }}', ['items' => $items]))
+        ->toBe('2,3,');
+});

@@ -43,20 +43,15 @@ final class LanguageParser
 {
     private readonly Lexer $lexer;
 
-    /** @var Token[] */
-    private array $tokens = [];
-
-    private int $pos = 0;
+    private TokenStream $stream;
 
     /** Template line the fragment currently being parsed starts on. */
     private int $baseLine = 1;
 
-    /** The fragment currently being parsed, quoted back in error messages. */
-    private string $source = '';
-
     public function __construct()
     {
-        $this->lexer = new Lexer();
+        $this->lexer  = new Lexer();
+        $this->stream = new TokenStream([]);
     }
 
     /**
@@ -446,12 +441,43 @@ final class LanguageParser
 
     public function parseExpression(string $input): AbstractNode
     {
-        $input        = trim($input);
-        $this->source = $input;
-        $this->tokens = $this->lexer->tokenize($input, $this->baseLine);
-        $this->pos    = 0;
+        $input = trim($input);
 
-        return $this->parseStatementSequence();
+        return $this->withStream(
+            new TokenStream($this->lexer->tokenize($input, $this->baseLine), $input, $this->baseLine),
+            $this->parseStatementSequence(...),
+        );
+    }
+
+    /**
+     * The single place the token cursor is switched. Everything that parses a
+     * sub-expression goes through here, so an inner parse cannot leave the outer
+     * one pointing into a foreign token list.
+     *
+     * @template T
+     * @param  callable(): T $parse
+     * @return T
+     */
+    private function withStream(TokenStream $stream, callable $parse): mixed
+    {
+        $previous     = $this->stream;
+        $this->stream = $stream;
+
+        try {
+            return $parse();
+        } finally {
+            $this->stream = $previous;
+        }
+    }
+
+    /**
+     * A stream over a slice of the current one, keeping its position context.
+     *
+     * @param list<Token> $tokens
+     */
+    private function subStream(array $tokens): TokenStream
+    {
+        return new TokenStream($tokens, $this->stream->source, $this->stream->baseLine);
     }
 
     private function parseStatementSequence(TokenType $terminator = TokenType::Eof): AbstractNode
@@ -609,18 +635,18 @@ final class LanguageParser
     }
 
     /**
-     * @return Token[]
+     * @return list<Token>
      */
     private function collectTernaryBranchTokens(): array
     {
-        $start        = $this->pos;
-        $cursor       = $this->pos;
+        $start        = $this->stream->position();
+        $cursor       = $start;
         $parenDepth   = 0;
         $bracketDepth = 0;
         $ternaryDepth = 0;
 
         while (true) {
-            $token = $this->tokens[$cursor] ?? new Token(TokenType::Eof, '');
+            $token = $this->stream->at($cursor);
 
             if ($token->is(TokenType::Eof)) {
                 $this->syntaxError('Unterminated ternary expression', $token);
@@ -674,28 +700,17 @@ final class LanguageParser
             $cursor++;
         }
 
-        $this->pos = $cursor;
+        $this->stream->seek($cursor);
 
-        return array_slice($this->tokens, $start, $cursor - $start);
+        return $this->stream->slice($start, $cursor - $start);
     }
 
     /**
-     * @param Token[] $tokens
+     * @param list<Token> $tokens
      */
     private function parseTokenSlice(array $tokens): AbstractNode
     {
-        $previousTokens = $this->tokens;
-        $previousPos    = $this->pos;
-
-        $this->tokens = [...$tokens, $this->endToken()];
-        $this->pos    = 0;
-
-        try {
-            return $this->parseStatementSequence();
-        } finally {
-            $this->tokens = $previousTokens;
-            $this->pos    = $previousPos;
-        }
+        return $this->withStream($this->subStream($tokens), $this->parseStatementSequence(...));
     }
 
     /**
@@ -1058,12 +1073,12 @@ final class LanguageParser
 
         /** @var list<list<Token>> $groups */
         $groups = [];
-        $start  = $this->pos;
-        $cursor = $this->pos;
+        $start  = $this->stream->position();
+        $cursor = $start;
         $depth  = 0;
 
         while (true) {
-            $token = $this->tokens[$cursor] ?? new Token(TokenType::Eof, '');
+            $token = $this->stream->at($cursor);
 
             if ($token->is(TokenType::Eof)) {
                 $this->syntaxError('Unterminated parenthesized expression', $token);
@@ -1073,9 +1088,9 @@ final class LanguageParser
                 $depth++;
             } elseif ($token->is(TokenType::RParen)) {
                 if ($depth === 0) {
-                    $groups[] = array_values(array_slice($this->tokens, $start, $cursor - $start));
+                    $groups[] = $this->stream->slice($start, $cursor - $start);
 
-                    $this->pos = $cursor + 1;
+                    $this->stream->seek($cursor + 1);
 
                     /** @var list<list<Token>> $filtered */
                     $filtered = [];
@@ -1092,7 +1107,7 @@ final class LanguageParser
             } elseif ($token->is(TokenType::RBracket)) {
                 $depth--;
             } elseif ($token->is(TokenType::Comma) && $depth === 0) {
-                $groups[] = array_values(array_slice($this->tokens, $start, $cursor - $start));
+                $groups[] = $this->stream->slice($start, $cursor - $start);
                 $start    = $cursor + 1;
             }
 
@@ -1140,21 +1155,11 @@ final class LanguageParser
      */
     private function parseLeadingExpressionFromTokens(array $tokens): array
     {
-        $previousTokens = $this->tokens;
-        $previousPos    = $this->pos;
+        $stream = $this->subStream($tokens);
 
-        $this->tokens = [...$tokens, $this->endToken()];
-        $this->pos    = 0;
+        $node = $this->withStream($stream, $this->parsePipedExpression(...));
 
-        try {
-            $node     = $this->parsePipedExpression();
-            $consumed = $this->pos;
-
-            return [$node, $consumed];
-        } finally {
-            $this->tokens = $previousTokens;
-            $this->pos    = $previousPos;
-        }
+        return [$node, $stream->position()];
     }
 
     private function parseCollectionAliasToken(Token $token): string
@@ -1319,27 +1324,12 @@ final class LanguageParser
 
     private function peek(): Token
     {
-        return $this->tokens[$this->pos] ?? $this->endToken();
+        return $this->stream->peek();
     }
 
     private function advance(): Token
     {
-        $token = $this->tokens[$this->pos] ?? $this->endToken();
-
-        $this->pos++;
-
-        return $token;
-    }
-
-    /**
-     * Stand-in for a missing token, positioned at the last real one so errors
-     * past the end of a fragment still report where that fragment was.
-     */
-    private function endToken(): Token
-    {
-        $last = $this->tokens[count($this->tokens) - 1] ?? null;
-
-        return new Token(TokenType::Eof, '', $last->offset ?? 0, $last->line ?? $this->baseLine);
+        return $this->stream->advance();
     }
 
     private function consume(TokenType $type): void
@@ -1362,7 +1352,7 @@ final class LanguageParser
      */
     private function syntaxError(string $message, ?Token $token = null): never
     {
-        throw new AntlersSyntaxException($message, ($token ?? $this->peek())->line, $this->source);
+        throw new AntlersSyntaxException($message, ($token ?? $this->peek())->line, $this->stream->source);
     }
 
     private function describeToken(Token $token): string
