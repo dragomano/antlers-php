@@ -256,7 +256,9 @@ it('applies divide modifier', function (): void {
 
 it('applies mod modifier', function (): void {
     expect(engine()->render('{{ price | mod:4 }}', ['price' => 10]))
-        ->toBe('2');
+        ->toBe('2')
+        ->and(engine()->render('{{ price | mod:0 }}', ['price' => 10]))
+        ->toBe('0');
 });
 
 it('applies ceil modifier', function (): void {

@@ -323,7 +323,20 @@ it('supports dump tag', function (): void {
     $output = engine()->render('{{ dump value=user }}', ['user' => ['name' => 'Alice']]);
 
     expect($output)->toContain('<pre>')
-        ->and($output)->toContain("'name' => 'Alice'");
+        ->and($output)->toContain('&apos;name&apos; =&gt; &apos;Alice&apos;');
+});
+
+it('escapes dumped values so they cannot break out of the pre block', function (): void {
+    $output = engine()->render('{{ dump value=payload }}', [
+        'payload' => '</pre><script>alert(1)</script>',
+    ]);
+
+    expect($output)->not->toContain('<script>')
+        ->and($output)->toContain('&lt;script&gt;');
+});
+
+it('returns empty for a dump tag without a value', function (): void {
+    expect(engine()->render('{{ dump }}', ['api_key' => 'secret']))->toBe('');
 });
 
 it('supports svg tag', function (): void {

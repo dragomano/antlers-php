@@ -53,6 +53,7 @@ final class CoreTags
         }
 
         [$keyAlias, $valueAlias] = self::parseForeachAliases($params['as'] ?? null);
+
         $limit = isset($params['limit']) ? max(0, self::int($params['limit'])) : null;
 
         if ($limit !== null && is_iterable($array->value)) {
@@ -60,7 +61,12 @@ final class CoreTags
         }
 
         return trim(
-            $processor->renderIterable($array->value, self::trimBoundaryWhitespace($children), $valueAlias, $keyAlias),
+            $processor->renderIterable(
+                $array->value,
+                self::trimBoundaryWhitespace($children),
+                $valueAlias,
+                $keyAlias,
+            ),
             "\r\n",
         );
     }
@@ -89,8 +95,12 @@ final class CoreTags
 
         return match ($method) {
             'exists'    => $exists,
-            'if_exists' => $exists ? $processor->renderTemplateFile($resolved, self::partialData($params, $data, $slotData)) : '',
-            default     => $fallback !== '' ? $processor->renderTemplateFile($fallback, self::partialData($params, $data, $slotData)) : '',
+            'if_exists' => $exists
+                ? $processor->renderTemplateFile($resolved, self::partialData($params, $data, $slotData))
+                : '',
+            default     => $fallback !== ''
+                ? $processor->renderTemplateFile($fallback, self::partialData($params, $data, $slotData))
+                : '',
         };
     }
 
@@ -357,11 +367,16 @@ final class CoreTags
 
     /**
      * @param array<string, mixed> $params
-     * @param array<string, mixed> $data
      */
-    private static function dumpTag(array $params, array $data): string
+    private static function dumpTag(array $params): string
     {
-        return '<pre>' . var_export($params['value'] ?? $params['var'] ?? $data, true) . '</pre>';
+        if (! array_key_exists('value', $params) && ! array_key_exists('var', $params)) {
+            return '';
+        }
+
+        $exported = var_export($params['value'] ?? $params['var'] ?? null, true);
+
+        return '<pre>' . htmlspecialchars($exported, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</pre>';
     }
 
     /**

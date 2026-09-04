@@ -11,6 +11,16 @@ it('does not guard an empty variable path', function (): void {
     ))->guardsVariable(''))->toBeFalse();
 });
 
+it('rejects mutation after construction', function (): void {
+    $policy = new GuardPolicy(
+        variables: ['user.password'],
+    );
+
+    expect(static function () use ($policy): void {
+        $policy->variables = [];
+    })->toThrow(Error::class);
+});
+
 it('renders guarded variables as empty strings in lenient mode', function (): void {
     $engine = engine()->setGuardPolicy(new GuardPolicy(
         variables: ['user.password'],

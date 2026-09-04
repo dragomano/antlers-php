@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Tags;
 
+use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Runtime\NodeProcessor;
 
@@ -35,7 +36,8 @@ final class TagRegistry
         NodeProcessor $processor,
         array $children = [],
     ): mixed {
-        $handler = $this->tags[$name];
+        $handler = $this->tags[$name]
+            ?? throw new AntlersRuntimeException(sprintf('Unknown tag: "%s"', $name));
 
         if ($handler instanceof TagInterface) {
             return $handler->handle($parameters, $data, $processor, $method, $children);

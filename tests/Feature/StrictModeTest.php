@@ -33,6 +33,10 @@ it('does not throw for undefined left side of ?? in strict mode', function (): v
     expect(strictEngine()->render('{{ missing ?? "default" }}'))->toBe('default');
 });
 
+it('does not throw for non-variable expression on left side of ?? in strict mode', function (): void {
+    expect(strictEngine()->render('{{ (missing + 1) ?? "default" }}'))->toBe('1');
+});
+
 it('returns defined right side variable via ?? in strict mode', function (): void {
     expect(strictEngine()->render('{{ missing ?? name }}', ['name' => 'Bob']))->toBe('Bob');
 });

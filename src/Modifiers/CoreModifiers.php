@@ -163,8 +163,11 @@ final class CoreModifiers
             return $divisor !== 0.0 ? self::float($v) / $divisor : 0.0;
         });
 
-        $registry->register('mod', static fn(mixed $v, array $p): int
-            => self::int($v) % self::int($p[0] ?? 1));
+        $registry->register('mod', static function (mixed $v, array $p): int {
+            $divisor = self::int($p[0] ?? 1);
+
+            return $divisor !== 0 ? self::int($v) % $divisor : 0;
+        });
 
         $registry->register('ceil', static fn(mixed $v): int => (int) ceil(self::float($v)));
 

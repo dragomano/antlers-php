@@ -101,22 +101,30 @@ final class NodeProcessor
      */
     public function reduce(array $nodes, array $data = []): string
     {
-        $isRootRender = $this->scopeStack === [];
-        if ($isRootRender) {
-            $this->sections   = [];
-            $this->stacks     = [];
-            $this->onceKeys   = [];
-            $this->increments = [];
-            $this->switches   = [];
+        if ($this->scopeStack === []) {
+            $this->resetPerRenderState();
         }
 
         $this->pushScope($data);
 
-        $output = $this->processNodes($nodes);
+        try {
+            return $this->processNodes($nodes);
+        } finally {
+            $this->popScope();
+        }
+    }
 
-        $this->popScope();
-
-        return $output;
+    /**
+     * State that belongs to a single top-level render. Reset before the root
+     * frame is pushed so a failed render cannot bleed into the next one.
+     */
+    private function resetPerRenderState(): void
+    {
+        $this->sections   = [];
+        $this->stacks     = [];
+        $this->onceKeys   = [];
+        $this->increments = [];
+        $this->switches   = [];
     }
 
     /**

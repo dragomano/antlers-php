@@ -4,17 +4,26 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers;
 
-final class GuardPolicy
+final readonly class GuardPolicy
 {
+    /** @var list<string> */
+    public array $variables;
+
+    /** @var list<string> */
+    public array $tags;
+
+    /** @var list<string> */
+    public array $modifiers;
+
     /**
      * @param list<string> $variables
      * @param list<string> $tags
      * @param list<string> $modifiers
      */
     public function __construct(
-        public array $variables = [],
-        public array $tags = [],
-        public array $modifiers = [],
+        array $variables = [],
+        array $tags = [],
+        array $modifiers = [],
     ) {
         $this->variables = $this->normalizeRules($variables);
         $this->tags      = $this->normalizeRules($tags);

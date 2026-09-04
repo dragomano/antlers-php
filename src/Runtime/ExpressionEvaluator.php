@@ -249,9 +249,11 @@ final readonly class ExpressionEvaluator
 
         $this->options->strict = false;
 
-        $left = $this->evaluateResult($node->left, $scope, $assignmentWriter);
-
-        $this->options->strict = $prev;
+        try {
+            $left = $this->evaluateResult($node->left, $scope, $assignmentWriter);
+        } finally {
+            $this->options->strict = $prev;
+        }
 
         return $left->value ?? $this->evaluate($node->right, $scope, $assignmentWriter);
     }
