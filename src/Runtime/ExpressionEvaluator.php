@@ -26,7 +26,6 @@ use Bugo\Antlers\Nodes\TruthyCoalesceNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
 use Bugo\Antlers\Nodes\VariableNode;
 use Bugo\Antlers\Nodes\VoidNode;
-use Traversable;
 
 /**
  * Evaluates expression AST nodes against a data scope.
@@ -374,35 +373,7 @@ final readonly class ExpressionEvaluator
 
     public function stringify(mixed $value): string
     {
-        if ($value instanceof VoidValue) {
-            return '';
-        }
-
-        if ($value === null) {
-            return '';
-        }
-
-        if (is_bool($value)) {
-            return $value ? 'true' : 'false';
-        }
-
-        if (is_array($value)) {
-            return implode('', array_map($this->stringify(...), $value));
-        }
-
-        if (is_object($value)) {
-            if (method_exists($value, '__toString')) {
-                return (string) $value;
-            }
-
-            return '';
-        }
-
-        if (is_int($value) || is_float($value) || is_string($value)) {
-            return (string) $value;
-        }
-
-        return '';
+        return ValueCoercion::toString($value);
     }
 
     private function coerceNumeric(mixed $value): int|float
@@ -643,21 +614,7 @@ final readonly class ExpressionEvaluator
      */
     private function makeCollectionItemScope(array $scope, mixed $item): array
     {
-        if (is_array($item)) {
-            /** @var array<string, mixed> $normalized */
-            $normalized = array_filter($item, is_string(...), ARRAY_FILTER_USE_KEY);
-
-            return array_merge($scope, $normalized);
-        }
-
-        if (is_object($item)) {
-            /** @var array<string, mixed> $normalized */
-            $normalized = array_filter((array) $item, is_string(...), ARRAY_FILTER_USE_KEY);
-
-            return array_merge($scope, $normalized);
-        }
-
-        return array_merge($scope, ['value' => $item]);
+        return array_merge($scope, ValueCoercion::toScopeFrame($item) ?? ['value' => $item]);
     }
 
     /**
@@ -665,15 +622,7 @@ final readonly class ExpressionEvaluator
      */
     private function iterableToArray(mixed $value): ?array
     {
-        if (is_array($value)) {
-            return $value;
-        }
-
-        if ($value instanceof Traversable) {
-            return iterator_to_array($value);
-        }
-
-        return null;
+        return ValueCoercion::toArray($value);
     }
 
     /**

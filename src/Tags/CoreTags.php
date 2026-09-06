@@ -7,6 +7,7 @@ namespace Bugo\Antlers\Tags;
 use Bugo\Antlers\Nodes\AbstractNode;
 use Bugo\Antlers\Nodes\LiteralNode;
 use Bugo\Antlers\Runtime\NodeProcessor;
+use Bugo\Antlers\Runtime\ValueCoercion;
 use Bugo\Antlers\Runtime\ValueResult;
 
 final class CoreTags
@@ -692,36 +693,12 @@ final class CoreTags
 
     private static function string(mixed $value): string
     {
-        if (is_scalar($value)) {
-            return (string) $value;
-        }
-
-        if (is_object($value) && method_exists($value, '__toString')) {
-            return (string) $value;
-        }
-
-        return '';
+        return ValueCoercion::toString($value);
     }
 
     private static function int(mixed $value): int
     {
-        if (is_int($value)) {
-            return $value;
-        }
-
-        if (is_float($value)) {
-            return (int) $value;
-        }
-
-        if (is_string($value) && is_numeric($value)) {
-            return (int) $value;
-        }
-
-        if (is_bool($value)) {
-            return $value ? 1 : 0;
-        }
-
-        return 0;
+        return ValueCoercion::toInt($value);
     }
 
     /**

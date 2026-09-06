@@ -6,10 +6,10 @@ namespace Bugo\Antlers\Modifiers;
 
 use ArrayAccess;
 use Bugo\Antlers\Runtime\RuntimeOptions;
+use Bugo\Antlers\Runtime\ValueCoercion;
 use Bugo\Antlers\Runtime\ValueResult;
 use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\String\UnicodeString;
-use Traversable;
 
 /**
  * Registers all built-in Antlers modifiers.
@@ -405,40 +405,12 @@ final class CoreModifiers
 
     private static function string(mixed $value): string
     {
-        if ($value === null) {
-            return '';
-        }
-
-        if (is_scalar($value)) {
-            return (string) $value;
-        }
-
-        if (is_object($value) && method_exists($value, '__toString')) {
-            return (string) $value;
-        }
-
-        return '';
+        return ValueCoercion::toString($value);
     }
 
     private static function int(mixed $value): int
     {
-        if (is_int($value)) {
-            return $value;
-        }
-
-        if (is_float($value)) {
-            return (int) $value;
-        }
-
-        if (is_string($value) && is_numeric($value)) {
-            return (int) $value;
-        }
-
-        if (is_bool($value)) {
-            return $value ? 1 : 0;
-        }
-
-        return 0;
+        return ValueCoercion::toInt($value);
     }
 
     private static function float(mixed $value): float
@@ -526,15 +498,7 @@ final class CoreModifiers
      */
     private static function iterableToArray(mixed $value): ?array
     {
-        if (is_array($value)) {
-            return $value;
-        }
-
-        if ($value instanceof Traversable) {
-            return iterator_to_array($value);
-        }
-
-        return null;
+        return ValueCoercion::toArray($value);
     }
 
     /**

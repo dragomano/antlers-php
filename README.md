@@ -64,6 +64,15 @@ See [Markdown Renderer](#markdown-renderer).
 
 `items[key]` uses the current scope variable `key` as the index. For a literal key, use dot notation: `{{ items.key }}`.
 
+A value is printed the same way everywhere — straight to output, through a modifier or through a
+tag. Booleans read as `true` and `false`, an array joins its parts, `null` and an object without
+`__toString()` print nothing:
+
+```antlers
+{{ flag }} {{ flag | upper }}      {{# true TRUE #}}
+{{ parts }} {{ parts | upper }}    {{# xy XY, for ['x', 'y'] #}}
+```
+
 ### Coalescing and Ternary Operator
 
 ```antlers

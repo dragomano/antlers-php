@@ -23,7 +23,6 @@ use Bugo\Antlers\Parser\DocumentParser;
 use Bugo\Antlers\Parser\LanguageParser;
 use Bugo\Antlers\Support\MarkdownRendererInterface;
 use Bugo\Antlers\Tags\TagRegistry;
-use Traversable;
 
 /**
  * Stage 4: Walks the parsed AST, evaluates nodes, and produces the final string output.
@@ -821,14 +820,7 @@ final class NodeProcessor
      */
     private function normalizeScopeFrame(array $data): array
     {
-        /** @var array<string, mixed> $normalized */
-        $normalized = array_filter(
-            $data,
-            is_string(...),
-            ARRAY_FILTER_USE_KEY,
-        );
-
-        return $normalized;
+        return ValueCoercion::stringKeys($data);
     }
 
     /**
@@ -836,15 +828,7 @@ final class NodeProcessor
      */
     private function iterableToArray(mixed $value): ?array
     {
-        if (is_array($value)) {
-            return $value;
-        }
-
-        if ($value instanceof Traversable) {
-            return iterator_to_array($value);
-        }
-
-        return null;
+        return ValueCoercion::toArray($value);
     }
 
     /**
@@ -852,37 +836,12 @@ final class NodeProcessor
      */
     private function extractItemScope(mixed $item): ?array
     {
-        $iterable = $this->iterableToArray($item);
-        if ($iterable !== null) {
-            return $this->normalizeScopeFrame($iterable);
-        }
-
-        if (is_object($item)) {
-            return $this->normalizeScopeFrame(get_object_vars($item));
-        }
-
-        return null;
+        return ValueCoercion::toScopeFrame($item);
     }
 
     private function toInt(mixed $value): int
     {
-        if (is_int($value)) {
-            return $value;
-        }
-
-        if (is_float($value)) {
-            return (int) $value;
-        }
-
-        if (is_string($value) && is_numeric($value)) {
-            return (int) $value;
-        }
-
-        if (is_bool($value)) {
-            return $value ? 1 : 0;
-        }
-
-        return 0;
+        return ValueCoercion::toInt($value);
     }
 
     /**
