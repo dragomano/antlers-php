@@ -101,4 +101,33 @@ describe('PathDataManager', function (): void {
                 'items' => ['key' => 'literal'],
             ]))->toBe('literal');
     });
+
+    it('takes a quoted subscript as the key itself, not as a variable name', function (string $path): void {
+        expect($this->pathDataManager->get($path, [
+            'items' => ['name' => 'literal', 'other' => 'dynamic'],
+            'name'  => 'other',
+        ]))->toBe('literal');
+    })->with([
+        'single quotes' => ["items['name']"],
+        'double quotes' => ['items["name"]'],
+    ]);
+
+    it('resolves a subscript that is itself a path', function (): void {
+        expect($this->pathDataManager->get('items[a.b]', [
+            'items' => ['name' => 'found'],
+            'a'     => ['b' => 'name'],
+        ]))->toBe('found');
+    });
+
+    it('walks chained subscripts', function (): void {
+        $data = ['matrix' => [['a', 'b'], ['c', 'd']]];
+
+        expect($this->pathDataManager->get('matrix[1][0]', $data))->toBe('c')
+            ->and($this->pathDataManager->has('matrix[1][0]', $data))->toBeTrue()
+            ->and($this->pathDataManager->has('matrix[1][9]', $data))->toBeFalse();
+    });
+
+    it('reads an empty subscript as an empty key', function (): void {
+        expect($this->pathDataManager->get('items[]', ['items' => ['' => 'blank']]))->toBe('blank');
+    });
 });

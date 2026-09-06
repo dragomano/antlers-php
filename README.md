@@ -60,9 +60,14 @@ See [Markdown Renderer](#markdown-renderer).
 {{ user.profile.name }}
 {{ items[0] }}
 {{ items[key] }}
+{{ items['name'] }}
+{{ matrix[1][0] }}
 ```
 
-`items[key]` uses the current scope variable `key` as the index. For a literal key, use dot notation: `{{ items.key }}`.
+`items[key]` uses the current scope variable `key` as the index, while `items['name']` and
+`items.name` both read the literal key. An index can be a path of its own (`items[a.b]`) and
+subscripts can chain (`matrix[1][0]`), but an index is not a full expression: `items[i + 1]` is a
+syntax error rather than a silent miss.
 
 A value is printed the same way everywhere — straight to output, through a modifier or through a
 tag. Booleans read as `true` and `false`, an array joins its parts, `null` and an object without

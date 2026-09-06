@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Exceptions\AntlersSyntaxException;
+
 it('renders a simple variable', function (): void {
     expect(engine()->render('Hello, {{ name }}!', ['name' => 'World']))->toBe('Hello, World!');
 });
@@ -25,6 +27,44 @@ it('renders dynamic index access', function (): void {
         'key'   => 'name',
     ]))->toBe('Alice');
 });
+
+it('renders a quoted index as the key itself even when a variable shares its name', function (
+    string $template,
+    string $expected,
+): void {
+    expect(engine()->render($template, [
+        'items' => ['name' => 'Alice', 'other' => 'Bob'],
+        'name'  => 'other',
+    ]))->toBe($expected);
+})->with([
+    'on its own'         => ["{{ items['name'] }}", 'Alice'],
+    'double quotes'      => ['{{ items["name"] }}', 'Alice'],
+    'through a modifier' => ["{{ items['name'] | lower }}", 'alice'],
+    'in a condition'     => ["{{ if items['name'] == 'Alice' }}yes{{ /if }}", 'yes'],
+]);
+
+it('renders an index that is itself a path', function (string $template, string $expected): void {
+    expect(engine()->render($template, [
+        'items' => ['name' => 'Alice'],
+        'a'     => ['b' => 'name'],
+    ]))->toBe($expected);
+})->with([
+    'on its own'         => ['{{ items[a.b] }}', 'Alice'],
+    'through a modifier' => ['{{ items[a.b] | upper }}', 'ALICE'],
+    'colon separated'    => ['{{ items[a:b] | upper }}', 'ALICE'],
+]);
+
+it('renders chained index access', function (): void {
+    expect(engine()->render('{{ matrix[1][0] }}', ['matrix' => [['a', 'b'], ['c', 'd']]]))->toBe('c');
+});
+
+it('reports an index it cannot read as a key or a path', function (string $template, string $message): void {
+    expect(fn(): string => engine()->render($template, ['items' => ['a'], 'i' => 0]))
+        ->toThrow(AntlersSyntaxException::class, $message);
+})->with([
+    'arithmetic'   => ['{{ items[i + 1] }}', 'Expected "]" but found "+"'],
+    'dangling dot' => ['{{ items[i.] | upper }}', 'Expected an identifier after "." in a subscript'],
+]);
 
 it('renders undefined variable as empty string', function (): void {
     expect(engine()->render('{{ missing }}'))->toBe('');

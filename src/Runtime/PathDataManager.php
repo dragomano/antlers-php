@@ -19,6 +19,7 @@ final class PathDataManager
      *   - Dot notation:    "user.name"        → $data['user']['name']
      *   - Array subscript: "items[0]"         → $data['items'][0]
      *   - Key subscript:   "items[key]"       → $data['items'][$data['key']]
+     *   - Literal key:     "items['key']"     → $data['items']['key']
      *   - Object access:   "obj.method"       → $obj->method or $obj->method()
      *
      * @param array<string, mixed> $scope
@@ -29,30 +30,14 @@ final class PathDataManager
             return null;
         }
 
-        $segments = $this->splitPath($path);
-        $current  = new ValueResult($scope);
+        $current = new ValueResult($scope);
 
-        foreach ($segments as $segment) {
+        foreach ($this->keysFor($path, $scope) as $key) {
             if ($current->value === null) {
                 return null;
             }
 
-            // Array subscript notation: segment = "items[0]" or "items[key]"
-            if (preg_match('/^(\w+)\[(.+?)]$/', $segment, $m)) {
-                $key   = $m[1];
-                $index = $m[2];
-
-                $current = $this->accessValue($current->value, $key);
-                if ($current->value === null) {
-                    return null;
-                }
-
-                $current = $this->accessValue($current->value, $this->resolveIndex($scope, $index));
-
-                continue;
-            }
-
-            $current = $this->accessValue($current->value, $segment);
+            $current = $this->accessValue($current->value, $key);
         }
 
         return $current->value;
@@ -69,36 +54,14 @@ final class PathDataManager
             return false;
         }
 
-        $segments = $this->splitPath($path);
-        $current  = new ValueResult($scope);
+        $current = new ValueResult($scope);
 
-        foreach ($segments as $segment) {
-            if ($current->value === null) {
+        foreach ($this->keysFor($path, $scope) as $key) {
+            if (! $this->keyExists($current->value, $key)) {
                 return false;
             }
 
-            if (preg_match('/^(\w+)\[(.+?)]$/', $segment, $m)) {
-                if (! $this->keyExists($current->value, $m[1])) {
-                    return false;
-                }
-
-                $current = $this->accessValue($current->value, $m[1]);
-                $index   = $this->resolveIndex($scope, $m[2]);
-
-                if (! $this->keyExists($current->value, $index)) {
-                    return false;
-                }
-
-                $current = $this->accessValue($current->value, $index);
-
-                continue;
-            }
-
-            if (! $this->keyExists($current->value, $segment)) {
-                return false;
-            }
-
-            $current = $this->accessValue($current->value, $segment);
+            $current = $this->accessValue($current->value, $key);
         }
 
         return true;
@@ -167,19 +130,24 @@ final class PathDataManager
     }
 
     /**
-     * Split "user.profile.name" into ["user", "profile", "name"].
-     * Handles segments that themselves contain array subscripts.
+     * Flattens a path into the keys to walk, so get() and has() share one loop.
      *
-     * @return string[]
+     * @param  array<string, mixed> $scope
+     * @return list<int|string>
      */
-    private function splitPath(string $path): array
+    private function keysFor(string $path, array $scope): array
     {
-        $path = str_replace(':', '.', $path);
+        preg_match_all('/[^.:\[\]]+|\[([^\[\]]*)]/', $path, $matches, PREG_SET_ORDER);
 
-        // We can't just explode('.') because "items[0]" has no dot but is one segment.
-        // Also, "a.b.c" → ["a","b","c"]
-        // Edge case: "obj.items[0].name" → ["obj", "items[0]", "name"]
-        return explode('.', $path);
+        $keys = [];
+
+        foreach ($matches as $match) {
+            $keys[] = isset($match[1])
+                ? $this->resolveIndex($scope, $match[1])
+                : $match[0];
+        }
+
+        return $keys;
     }
 
     private function stringifyKey(mixed $value): string
@@ -200,8 +168,13 @@ final class PathDataManager
      */
     private function resolveIndex(array $scope, string $index): int|string
     {
-        if (array_key_exists($index, $scope)) {
-            return $this->indexKey($scope[$index]);
+        $literal = $this->unquote($index);
+        if ($literal !== null) {
+            return $literal;
+        }
+
+        if ($this->has($index, $scope)) {
+            return $this->indexKey($this->get($index, $scope));
         }
 
         if (is_numeric($index)) {
@@ -209,6 +182,18 @@ final class PathDataManager
         }
 
         return $index;
+    }
+
+    /** Quotes are the author saying "this key, not the variable named like it". */
+    private function unquote(string $index): ?string
+    {
+        $quote = $index[0] ?? '';
+
+        if (strlen($index) >= 2 && ($quote === "'" || $quote === '"') && str_ends_with($index, $quote)) {
+            return substr($index, 1, -1);
+        }
+
+        return null;
     }
 
     private function indexKey(mixed $value): int|string

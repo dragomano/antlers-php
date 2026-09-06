@@ -77,6 +77,7 @@ enum TokenType: string
     /** Surface syntax for the punctuation and operator tokens, for error messages. */
     private const SYMBOLS = [
         'T_DOLLAR'   => '$',
+        'T_DOT'      => '.',
         'T_COLON'    => ':',
         'T_PIPE'     => '|',
         'T_QUESTION' => '?',

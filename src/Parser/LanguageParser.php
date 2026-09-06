@@ -862,14 +862,44 @@ final class LanguageParser
         while ($this->peek()->is(TokenType::LBracket)) {
             $this->advance(); // consume [
 
-            $indexToken = $this->advance();
-
-            $path .= '[' . $indexToken->value . ']';
+            $path .= '[' . $this->parseSubscript() . ']';
 
             $this->consume(TokenType::RBracket);
         }
 
         return new VariableNode($path);
+    }
+
+    /** Keeps the quotes that tell a literal key from a variable of the same name. */
+    private function parseSubscript(): string
+    {
+        $token = $this->advance();
+
+        if ($token->is(TokenType::String)) {
+            return "'" . $token->value . "'";
+        }
+
+        if (! $token->is(TokenType::Identifier)) {
+            return $token->value;
+        }
+
+        $source = $token->value;
+
+        while ($this->peek()->is(TokenType::Dot, TokenType::Colon)) {
+            $separator = $this->advance();
+            $next      = $this->peek();
+
+            if (! $next->is(TokenType::Identifier)) {
+                $this->syntaxError(sprintf(
+                    'Expected an identifier after %s in a subscript',
+                    $separator->type->describe(),
+                ), $next);
+            }
+
+            $source .= $separator->value . $this->advance()->value;
+        }
+
+        return $source;
     }
 
     private function parseArrayLiteral(): ArrayNode
@@ -923,9 +953,7 @@ final class LanguageParser
         while ($this->peek()->is(TokenType::LBracket)) {
             $this->advance();
 
-            $indexToken = $this->advance();
-
-            $path .= '[' . $indexToken->value . ']';
+            $path .= '[' . $this->parseSubscript() . ']';
 
             $this->consume(TokenType::RBracket);
         }
