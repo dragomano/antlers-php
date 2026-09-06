@@ -243,6 +243,31 @@ Single tag: @{{ name }}
 {{ /markdown }}
 ```
 
+A registered name is a tag call in every form it can be written — with a method, with
+parameters, and as a paired block without any. Names are resolved against the tag registry, so a
+tag added through `addTag()` behaves exactly like a built-in one. A bare word after the name is a
+flag parameter and arrives as `true`:
+
+```antlers
+{{ box }}...{{ /box }}   {{# paired call, no parameters #}}
+{{ box flag }}           {{# parameter "flag" is true #}}
+```
+
+A registered tag wins over a variable of the same name. Prefix the name with `$` to force the
+variable, or with `%` to force the tag:
+
+```antlers
+{{ $box }}{{ value }}{{ /$box }}   {{# the variable, even though a box tag exists #}}
+{{ %box }}                        {{# the tag, even though a box variable exists #}}
+```
+
+A name that is not registered but is written like a tag is still reported as one, so the message
+names the tag instead of complaining about its parameters:
+
+```
+{{ cache key="home" }}   {{# Unknown tag: "cache" #}}
+```
+
 Whether `{{ name }}` is an interpolation or a paired block is decided per occurrence, by
 looking for the matching `{{ /name }}`. So the same name can be used both ways in one
 template:

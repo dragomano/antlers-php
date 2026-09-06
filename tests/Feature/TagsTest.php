@@ -2,8 +2,48 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Engine;
+use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\Runtime\NodeProcessor;
 use Bugo\Antlers\Tags\AbstractTag;
+
+function boxEngine(): Engine
+{
+    $engine = engine();
+    $engine->addTag(
+        'box',
+        fn(array $params, array $data, NodeProcessor $proc, string $method, array $children): string
+            => '[' . $proc->renderFragment($children) . ']',
+    );
+
+    return $engine;
+}
+
+it('calls a paired tag written without parameters', function (string $template, string $expected): void {
+    expect(boxEngine()->render($template, ['items' => [1, 2]]))->toBe($expected);
+})->with([
+    'on its own'         => ['{{ box }}X{{ /box }}', '[X]'],
+    'inside a condition' => ['{{ if true }}{{ box }}Q{{ /box }}{{ /if }}', '[Q]'],
+    'inside a loop'      => ['{{ foreach items as i }}{{ box }}{{ i }}{{ /box }}{{ /foreach }}', '[1][2]'],
+]);
+
+it('reads a bare word after a tag name as a flag parameter', function (): void {
+    $e = engine();
+    $e->addTag('box', fn(array $params): string => implode(',', array_keys(array_filter($params))));
+
+    expect($e->render('{{ box flag }}Y{{ /box }}'))->toBe('flag');
+});
+
+it('prefers a paired tag over a same-named variable, which $ still forces', function (): void {
+    expect(boxEngine()->render('{{ box }}W{{ /box }}', ['box' => ['a', 'b']]))->toBe('[W]')
+        ->and(boxEngine()->render('{{ $box }}{{ value }}{{ /$box }}', ['box' => ['a', 'b']]))->toBe('ab');
+});
+
+it('reports an unregistered tag by name instead of by its parameters', function (): void {
+    expect(engine()->render('{{ cache key="home" }}'))->toBe('')
+        ->and(fn(): string => engine()->setStrictMode(true)->render('{{ cache key="home" }}'))
+        ->toThrow(AntlersRuntimeException::class, 'Unknown tag: "cache"');
+});
 
 it('calls a simple callable tag', function (): void {
     $e = engine();

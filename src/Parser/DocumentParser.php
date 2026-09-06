@@ -27,7 +27,7 @@ final class DocumentParser
     private array $nodes = [];
 
     // Tags that are always block-level (require a closing {{ /tag }})
-    private const BUILTIN_BLOCKS = [
+    public const BUILTIN_BLOCKS = [
         'if', 'unless', 'foreach', 'for',
     ];
 

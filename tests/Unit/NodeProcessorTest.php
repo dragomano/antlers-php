@@ -26,16 +26,18 @@ use Bugo\Antlers\Runtime\NodeProcessor;
 use Bugo\Antlers\Runtime\PathDataManager;
 use Bugo\Antlers\Runtime\RuntimeOptions;
 use Bugo\Antlers\Tags\CoreTags;
+use Bugo\Antlers\Tags\NameResolver;
 use Bugo\Antlers\Tags\TagRegistry;
 
 function nodeProcessor(bool $strict = false, ?GuardPolicy $guardPolicy = null): NodeProcessor
 {
     $documentParser = new DocumentParser();
-    $languageParser = new LanguageParser();
     $tagRegistry    = new TagRegistry();
     $modifiers      = new ModifierRegistry();
 
     CoreTags::register($tagRegistry);
+
+    $languageParser = new LanguageParser(new NameResolver($tagRegistry));
 
     $options              = new RuntimeOptions();
     $options->strict      = $strict;
@@ -62,12 +64,13 @@ function nodeProcessor(bool $strict = false, ?GuardPolicy $guardPolicy = null): 
 function nodeProcessorWithTag(string $name, callable $handler): NodeProcessor
 {
     $documentParser = new DocumentParser();
-    $languageParser = new LanguageParser();
     $tagRegistry    = new TagRegistry();
     $modifiers      = new ModifierRegistry();
 
     CoreTags::register($tagRegistry);
     $tagRegistry->register($name, $handler);
+
+    $languageParser = new LanguageParser(new NameResolver($tagRegistry));
 
     $options    = new RuntimeOptions();
     $paths      = new PathDataManager();

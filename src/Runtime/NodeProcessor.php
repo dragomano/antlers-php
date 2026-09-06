@@ -237,9 +237,8 @@ final class NodeProcessor
         }
 
         // Paired variable block: {{ items }}...{{ /items }}
-        // DocumentParser filled $node->children; built-in blocks (if/foreach/for) handle themselves below.
-        $builtinBlocks = ['if', 'unless', 'foreach', 'for', 'cache', 'markdown'];
-        if ($node->children !== [] && ! in_array($node->name, $builtinBlocks, strict: true)) {
+        // DocumentParser filled $node->children; language constructs (if/foreach/for) parse themselves below.
+        if ($node->children !== [] && ! in_array($node->name, DocumentParser::BUILTIN_BLOCKS, strict: true)) {
             $parsed = $this->parser->parseNode($node);
 
             // Could be a paired tag in the registry

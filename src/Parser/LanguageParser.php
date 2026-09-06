@@ -33,6 +33,8 @@ use Bugo\Antlers\Nodes\TruthyCoalesceNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
 use Bugo\Antlers\Nodes\VariableNode;
 use Bugo\Antlers\Nodes\VoidNode;
+use Bugo\Antlers\Tags\NameResolver;
+use Bugo\Antlers\Tags\TagRegistry;
 
 /**
  * Stage 3: Parses AntlersNode raw content + children into typed AST nodes.
@@ -43,14 +45,17 @@ final class LanguageParser
 {
     private readonly Lexer $lexer;
 
+    private readonly NameResolver $names;
+
     private TokenStream $stream;
 
     /** Template line the fragment currently being parsed starts on. */
     private int $baseLine = 1;
 
-    public function __construct()
+    public function __construct(?NameResolver $names = null)
     {
         $this->lexer  = new Lexer();
+        $this->names  = $names ?? new NameResolver(new TagRegistry());
         $this->stream = new TokenStream([]);
     }
 
@@ -126,38 +131,7 @@ final class LanguageParser
             return $this->parseTagNode($node);
         }
 
-        if (in_array($node->name, [
-            'switch',
-            'markdown',
-            'scope',
-            'loop',
-            'section',
-            'yield',
-            'slot',
-            'stack',
-            'push',
-            'prepend',
-            'once',
-            'partial',
-            'layout',
-            'dump',
-            'svg',
-            'increment',
-        ], strict: true)) {
-            return $this->parseTagNode($node);
-        }
-
-        if (str_starts_with($node->name, 'scope:')
-            || str_starts_with($node->name, 'section:')
-            || str_starts_with($node->name, 'yield:')
-            || str_starts_with($node->name, 'slot:')
-            || str_starts_with($node->name, 'stack:')
-            || str_starts_with($node->name, 'push:')
-            || str_starts_with($node->name, 'prepend:')
-            || str_starts_with($node->name, 'once:')
-            || str_starts_with($node->name, 'layout:')
-            || str_starts_with($node->name, 'markdown:')
-        ) {
+        if ($this->names->isTag($node->name)) {
             return $this->parseTagNode($node);
         }
 
@@ -1215,13 +1189,6 @@ final class LanguageParser
         // tag:method syntax
         if (preg_match('/^\w+:\w+/', $raw)) {
             return true;
-        }
-
-        // Known built-in tags
-        $knownTags = ['partial', 'cache', 'markdown', 'scope', 'set', 'increment', 'slot'];
-        $firstWord = strtolower((string) preg_replace('/[\s:].*/s', '', $raw));
-        if (in_array($firstWord, $knownTags, strict: true)) {
-            return false; // handled separately
         }
 
         // Identifier followed by key="value" param pattern

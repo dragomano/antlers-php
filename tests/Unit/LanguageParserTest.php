@@ -246,7 +246,7 @@ describe('LanguageParser', function (): void {
             ->toThrow(AntlersSyntaxException::class, 'Unterminated parenthesized expression');
     });
 
-    it('parses interpolated strings and known non-tag syntax branches', function (): void {
+    it('parses interpolated strings', function (): void {
         $interpolated = $this->languageParser->parseExpression('"Hello {name}!"');
         $unclosedTail = $this->languageParser->parseExpression('"Hi {name} {"');
 
@@ -259,9 +259,15 @@ describe('LanguageParser', function (): void {
             ->and($unclosedTail->parts[0])->toBe('Hi ')
             ->and($unclosedTail->parts[1])->toBeInstanceOf(VariableNode::class)
             ->and($unclosedTail->parts[2])->toBe(' ')
-            ->and($unclosedTail->parts[3])->toBe('{')
-            ->and(fn() => $this->languageParser->parseNode(parserNode('cache', 'cache key="home"')))
-            ->toThrow(AntlersSyntaxException::class, 'Unexpected "key" in expression in "cache key="home""');
+            ->and($unclosedTail->parts[3])->toBe('{');
+    });
+
+    it('parses an unregistered name written like a tag as a tag call', function (): void {
+        $parsed = $this->languageParser->parseNode(parserNode('cache', 'cache key="home"'));
+
+        expect($parsed)->toBeInstanceOf(TagNode::class)
+            ->and($parsed->name)->toBe('cache')
+            ->and(array_keys($parsed->parameters))->toBe(['key']);
     });
 
     it('handles trailing tag whitespace and nested ternary branch token slicing', function (): void {

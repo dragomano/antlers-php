@@ -12,6 +12,7 @@ use Bugo\Antlers\Runtime\ModifierRunner;
 use Bugo\Antlers\Runtime\NodeProcessor;
 use Bugo\Antlers\Runtime\PathDataManager;
 use Bugo\Antlers\Runtime\RuntimeOptions;
+use Bugo\Antlers\Tags\NameResolver;
 use Bugo\Antlers\Tags\TagRegistry;
 
 function bareNodeProcessor(TagRegistry $tagRegistry): NodeProcessor
@@ -27,7 +28,7 @@ function bareNodeProcessor(TagRegistry $tagRegistry): NodeProcessor
         new ConditionProcessor($evaluator),
         $tagRegistry,
         $paths,
-        new LanguageParser(),
+        new LanguageParser(new NameResolver($tagRegistry)),
         $options,
     );
 }

@@ -17,6 +17,7 @@ use Bugo\Antlers\Runtime\PathDataManager;
 use Bugo\Antlers\Runtime\RuntimeOptions;
 use Bugo\Antlers\Support\MarkdownRendererInterface;
 use Bugo\Antlers\Tags\CoreTags;
+use Bugo\Antlers\Tags\NameResolver;
 use Bugo\Antlers\Tags\TagInterface;
 use Bugo\Antlers\Tags\TagRegistry;
 
@@ -29,6 +30,8 @@ use Bugo\Antlers\Tags\TagRegistry;
  */
 final class Engine
 {
+    private readonly LanguageParser $languageParser;
+
     private readonly NodeProcessor $processor;
 
     private readonly RuntimeOptions $runtimeOptions;
@@ -38,10 +41,11 @@ final class Engine
 
     public function __construct(
         private readonly DocumentParser $documentParser = new DocumentParser(),
-        private readonly LanguageParser $languageParser = new LanguageParser(),
+        ?LanguageParser $languageParser = null,
         private readonly TagRegistry $tagRegistry = new TagRegistry(),
         private readonly ModifierRegistry $modifierRegistry = new ModifierRegistry(),
     ) {
+        $this->languageParser = $languageParser ?? new LanguageParser(new NameResolver($this->tagRegistry));
         $this->runtimeOptions = new RuntimeOptions();
 
         // Register built-in modifiers
