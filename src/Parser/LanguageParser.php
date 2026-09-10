@@ -320,7 +320,7 @@ final class LanguageParser
 
             // Read key
             $keyStart  = $pos;
-            $isDynamic = $raw[$pos] === ':';
+            $isDynamic = $pos < $length && $raw[$pos] === ':';
 
             if ($isDynamic) {
                 $pos++;
@@ -373,26 +373,50 @@ final class LanguageParser
 
                 // Read value
                 if ($pos < $length && ($raw[$pos] === '"' || $raw[$pos] === "'")) {
-                    $quote    = $raw[$pos++];
-                    $valStart = $pos;
+                    $quote = $raw[$pos++];
+                    $val   = '';
 
+                    // Read string with escape sequence processing (same as Lexer)
                     while ($pos < $length && $raw[$pos] !== $quote) {
-                        if ($raw[$pos] === '\\') {
-                            $pos++;
+                        if ($raw[$pos] === '\\' && $pos + 1 < $length) {
+                            $next = $raw[$pos + 1];
+                            $val .= match ($next) {
+                                'n'     => "\n",
+                                't'     => "\t",
+                                'r'     => "\r",
+                                '\\'    => '\\',
+                                '"'     => '"',
+                                "'"     => "'",
+                                '0'     => "\0",
+                                default => '\\' . $next,
+                            };
+                            $pos += 2;
+                        } else {
+                            $val .= $raw[$pos++];
                         }
-
-                        $pos++;
                     }
-
-                    $val = substr($raw, $valStart, $pos - $valStart);
 
                     $pos++; // skip closing quote
 
                     $params[$key] = $isDynamic ? $this->parseDynamicParameterValue($val) : $this->makeStringNode($val);
                 } else {
-                    // Unquoted value — read until whitespace
+                    // Unquoted value — parse as expression
                     $valStart = $pos;
-                    while ($pos < $length && ! ctype_space($raw[$pos])) {
+                    $depth    = 0;
+
+                    // Collect value tokens, respecting parentheses for expressions like "a=fn(x, y)"
+                    while ($pos < $length) {
+                        $ch = $raw[$pos];
+
+                        if ($ch === '(' || $ch === '[') {
+                            $depth++;
+                        } elseif ($ch === ')' || $ch === ']') {
+                            $depth--;
+                        } elseif ($depth === 0 && ctype_space($ch)) {
+                            // Stop at whitespace when not inside parentheses/brackets
+                            break;
+                        }
+
                         $pos++;
                     }
 
@@ -1226,8 +1250,49 @@ final class LanguageParser
             return true;
         }
 
-        // Identifier followed by key="value" param pattern
-        return (bool) preg_match('/^\w+\s+(?::\$\w+|:?[\w-]+=)/', $raw);
+        // Identifier followed by parameters:
+        // - :$variable
+        // - :key or key= (with optional value)
+        // - identifier (boolean flag, must start with letter or underscore)
+        if (preg_match('/^\w+\s+(?::\$\w+|:?[\w-]+=)/', $raw)) {
+            return true;
+        }
+
+        // Check for boolean flag, but exclude reserved keywords and collection operators
+        if (preg_match('/^(\w+)\s+([a-zA-Z_][\w-]*)(\s|$)/', $raw, $matches)) {
+            $potentialFlag = $matches[2];
+            $afterFlag     = $matches[3];
+
+            // If followed immediately by '(', it's a collection operator like where(active), not a tag
+            $restOfString = substr($raw, strlen($matches[0]));
+            if (str_starts_with($restOfString, '(')) {
+                return false;
+            }
+
+            // Exclude language keywords and collection operators
+            $keywords = [
+                'and',
+                'or',
+                'xor',
+                'not',
+                'true',
+                'false',
+                'null',
+                'as',
+                'in',
+                'merge',
+                'where',
+                'take',
+                'skip',
+                'pluck',
+                'orderby',
+                'groupby',
+            ];
+
+            return ! in_array(strtolower($potentialFlag), $keywords, true);
+        }
+
+        return false;
     }
 
     private function parseDynamicParameterValue(string $value): AbstractNode
