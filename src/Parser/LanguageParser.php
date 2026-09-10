@@ -517,7 +517,7 @@ final class LanguageParser
 
     private function parseAssignmentExpression(): AbstractNode
     {
-        $expr = $this->parsePipedExpression();
+        $expr = $this->parseTernaryExpression();
 
         $operator = $this->peek();
         if (! $operator->is(
@@ -553,59 +553,9 @@ final class LanguageParser
         );
     }
 
-    private function parsePipedExpression(): AbstractNode
-    {
-        $expr = $this->parseGatekeeperExpression();
-
-        if ($this->peek()->is(TokenType::Pipe)) {
-            return $this->parseModifierChain($expr);
-        }
-
-        return $expr;
-    }
-
-    private function parseGatekeeperExpression(): AbstractNode
-    {
-        $expr = $this->parseCollectionExpression();
-
-        if (! $this->peek()->is(TokenType::QEquals)) {
-            return $expr;
-        }
-
-        $this->consume(TokenType::QEquals);
-
-        return new GatekeeperNode($expr, $this->parsePipedExpression());
-    }
-
-    private function parseCollectionExpression(): AbstractNode
-    {
-        $expr       = $this->parseTernaryExpression();
-        $operations = [];
-
-        while ($this->isCollectionOperator($this->peek())) {
-            $operator = CollectionOperator::from(strtolower($this->advance()->value));
-
-            $operations[] = match ($operator) {
-                CollectionOperator::Take,
-                CollectionOperator::Skip,
-                CollectionOperator::Pluck   => new CollectionOperatorNode($operator->value, [$this->parseSingleCollectionArgument()]),
-                CollectionOperator::Merge   => new CollectionOperatorNode($operator->value, [$this->parseTernaryExpression()]),
-                CollectionOperator::Where   => $this->parseWhereCollectionOperator(),
-                CollectionOperator::OrderBy => $this->parseOrderByCollectionOperator(),
-                CollectionOperator::GroupBy => $this->parseGroupByCollectionOperator(),
-            };
-        }
-
-        if ($operations === []) {
-            return $expr;
-        }
-
-        return new CollectionOperationNode($expr, $operations);
-    }
-
     private function parseTernaryExpression(): AbstractNode
     {
-        $expr = $this->parseExpr(0);
+        $expr = $this->parsePipedExpression();
 
         if (! $this->peek()->is(TokenType::Question)) {
             return $expr;
@@ -617,7 +567,7 @@ final class LanguageParser
 
         $this->consume(TokenType::Colon);
 
-        $falseBranch = $this->parsePipedExpression();
+        $falseBranch = $this->parseTernaryExpression();
 
         return new TernaryNode($expr, $trueBranch, $falseBranch);
     }
@@ -693,6 +643,56 @@ final class LanguageParser
         return $this->stream->slice($start, $cursor - $start);
     }
 
+    private function parsePipedExpression(): AbstractNode
+    {
+        $expr = $this->parseGatekeeperExpression();
+
+        if ($this->peek()->is(TokenType::Pipe) && ! $this->isCollectionOperator($this->peek())) {
+            return $this->parseModifierChain($expr);
+        }
+
+        return $expr;
+    }
+
+    private function parseGatekeeperExpression(): AbstractNode
+    {
+        $expr = $this->parseCollectionExpression();
+
+        if (! $this->peek()->is(TokenType::QEquals)) {
+            return $expr;
+        }
+
+        $this->consume(TokenType::QEquals);
+
+        return new GatekeeperNode($expr, $this->parseTernaryExpression());
+    }
+
+    private function parseCollectionExpression(): AbstractNode
+    {
+        $expr       = $this->parseExpr(0);
+        $operations = [];
+
+        while ($this->isCollectionOperator($this->peek())) {
+            $operator = CollectionOperator::from(strtolower($this->advance()->value));
+
+            $operations[] = match ($operator) {
+                CollectionOperator::Take,
+                CollectionOperator::Skip,
+                CollectionOperator::Pluck   => new CollectionOperatorNode($operator->value, [$this->parseSingleCollectionArgument()]),
+                CollectionOperator::Merge   => new CollectionOperatorNode($operator->value, [$this->parseExpr(0)]),
+                CollectionOperator::Where   => $this->parseWhereCollectionOperator(),
+                CollectionOperator::OrderBy => $this->parseOrderByCollectionOperator(),
+                CollectionOperator::GroupBy => $this->parseGroupByCollectionOperator(),
+            };
+        }
+
+        if ($operations === []) {
+            return $expr;
+        }
+
+        return new CollectionOperationNode($expr, $operations);
+    }
+
     /**
      * @param list<Token> $tokens
      */
@@ -700,6 +700,8 @@ final class LanguageParser
     {
         return $this->withStream($this->subStream($tokens), $this->parseStatementSequence(...));
     }
+
+
 
     /**
      * Pratt expression parser with operator precedence.
@@ -719,19 +721,24 @@ final class LanguageParser
                 break;
             }
 
-            // Coalescing operators — right-associative
             $this->advance();
 
-            if ($op->is(TokenType::QQ, TokenType::QQQ)) {
+            // Right-associative operators: ??, ???, **, ^
+            if ($op->is(TokenType::QQ, TokenType::QQQ, TokenType::Power, TokenType::Caret)) {
                 $right = $this->parseExpr($bp - 1);
 
-                $left = $op->is(TokenType::QQ)
-                    ? new TruthyCoalesceNode($left, $right)
-                    : new NullCoalesceNode($left, $right);
+                if ($op->is(TokenType::QQ)) {
+                    $left = new TruthyCoalesceNode($left, $right);
+                } elseif ($op->is(TokenType::QQQ)) {
+                    $left = new NullCoalesceNode($left, $right);
+                } else {
+                    $left = new BinaryOpNode($left, $op->value, $right);
+                }
 
                 continue;
             }
 
+            // Left-associative operators
             $right = $this->parseExpr($bp);
             $left  = new BinaryOpNode($left, $op->value, $right);
         }
