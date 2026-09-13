@@ -136,9 +136,37 @@ final class DocumentParser
     {
         $startLine = $this->line;
 
-        $end = strpos($this->template, '}}', $this->pos);
-        if ($end === false) {
-            throw new AntlersSyntaxException('Unclosed Antlers tag "{{"', $this->line);
+        $quote = null;
+        $depth = 0;
+
+        for ($end = $this->pos; $end < $this->length; $end++) {
+            $char = $this->template[$end];
+
+            if ($quote !== null) {
+                if ($char === '\\') {
+                    $end++;
+                } elseif ($char === $quote) {
+                    $quote = null;
+                }
+
+                continue;
+            }
+
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+            } elseif ($char === '{') {
+                $depth++;
+            } elseif ($char === '}') {
+                if ($depth > 0) {
+                    $depth--;
+                } elseif ($end + 1 < $this->length && $this->template[$end + 1] === '}') {
+                    break;
+                }
+            }
+        }
+
+        if ($end >= $this->length) {
+            throw new AntlersSyntaxException($quote !== null ? 'Unterminated string' : 'Unclosed Antlers tag "{{"', $startLine);
         }
 
         $raw = substr($this->template, $this->pos, $end - $this->pos);

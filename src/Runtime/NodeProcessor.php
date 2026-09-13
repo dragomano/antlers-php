@@ -62,6 +62,8 @@ final class NodeProcessor
     ) {
         $this->scope = new Scope();
         $this->state = new RenderState();
+
+        $this->evaluator->setProcessor($this);
     }
 
     /**
@@ -432,6 +434,12 @@ final class NodeProcessor
      */
     private function processTag(TagNode $node, array $scope): string
     {
+        return $this->evaluator->stringify($this->callTag($node, $scope));
+    }
+
+    /** @param array<string, mixed> $scope */
+    public function callTag(TagNode $node, array $scope): mixed
+    {
         if (! $this->tags->has($node->name)) {
             return $this->options->fail(sprintf('Unknown tag: "%s"', $node->name));
         }
@@ -440,7 +448,6 @@ final class NodeProcessor
             return $this->options->fail(sprintf('Guarded tag: "%s"', $node->name));
         }
 
-        // Resolve parameter values
         $params = array_map(
             fn(AbstractNode $paramNode): mixed => $this->evaluateNodeValue($paramNode, $scope),
             $node->parameters,
@@ -451,13 +458,7 @@ final class NodeProcessor
             static fn(mixed $value): bool => ! $value instanceof VoidValue,
         );
 
-        $result = $this->handleTagResult($node, $params, $scope);
-
-        if ($result->value === null) {
-            return '';
-        }
-
-        return $this->evaluator->stringify($result->value);
+        return $this->handleTagResult($node, $params, $scope)->value;
     }
 
     /**

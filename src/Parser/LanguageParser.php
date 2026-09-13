@@ -28,6 +28,7 @@ use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\SetNode;
 use Bugo\Antlers\Nodes\StringValueNode;
 use Bugo\Antlers\Nodes\TagNode;
+use Bugo\Antlers\Nodes\TagSubExpressionNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Nodes\TruthyCoalesceNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
@@ -808,6 +809,17 @@ final class LanguageParser
             return $expr;
         }
 
+        if ($token->is(TokenType::TagExpression)) {
+            $this->advance();
+
+            $raw = trim($token->value);
+            if ($raw === '') {
+                $this->syntaxError('Empty tag sub-expression "{}"', $token);
+            }
+
+            return new TagSubExpressionNode($this->parseTagFromRaw($raw, $token->line));
+        }
+
         if ($token->is(TokenType::LBracket)) {
             return $this->parseArrayLiteral();
         }
@@ -1295,6 +1307,15 @@ final class LanguageParser
         return false;
     }
 
+    private function parseTagFromRaw(string $raw, int $line): TagNode
+    {
+        $blockNode             = new AntlersNode();
+        $blockNode->rawContent = $raw;
+        $blockNode->line       = $line;
+
+        return $this->parseTagNode($blockNode);
+    }
+
     private function parseDynamicParameterValue(string $value): AbstractNode
     {
         $value = trim($value);
@@ -1308,11 +1329,20 @@ final class LanguageParser
 
     private function makeStringNode(string $value): StringValueNode
     {
-        $hasInterpolation = str_contains($value, '{') && str_contains($value, '}');
+        if (! str_contains($value, '{') && ! str_contains($value, '}')) {
+            return new StringValueNode($value, false);
+        }
 
-        $node = new StringValueNode($value, $hasInterpolation);
+        $parts    = $this->parseStringInterpolation($value);
+        $hasInter = count(array_filter($parts, static fn(string|AbstractNode $part): bool => ! is_string($part))) > 0;
 
-        $node->parts = $hasInterpolation ? $this->parseStringInterpolation($value) : [$value];
+        if (! $hasInter) {
+            /** @var list<string> $parts */
+            return new StringValueNode(implode('', $parts), false);
+        }
+
+        $node        = new StringValueNode($value, true);
+        $node->parts = $parts;
 
         return $node;
     }
@@ -1324,32 +1354,53 @@ final class LanguageParser
      */
     private function parseStringInterpolation(string $value): array
     {
-        $parts  = [];
-        $offset = 0;
-        $length = strlen($value);
+        $parts   = [];
+        $literal = '';
+        $offset  = 0;
+        $length  = strlen($value);
 
         while ($offset < $length) {
-            $open = strpos($value, '{', $offset);
-            if ($open === false) {
-                $parts[] = substr($value, $offset);
+            $ch = $value[$offset];
 
-                break;
+            if ($ch === '@' && $offset + 1 < $length && ($value[$offset + 1] === '{' || $value[$offset + 1] === '}')) {
+                $literal .= $value[$offset + 1];
+                $offset  += 2;
+
+                continue;
             }
 
-            if ($open > $offset) {
-                $parts[] = substr($value, $offset, $open - $offset);
+            if ($ch === '{') {
+                $close = strpos($value, '}', $offset);
+
+                if ($close === false) {
+                    if ($literal !== '') {
+                        $parts[] = $literal;
+                        $literal = '';
+                    }
+
+                    $parts[] = substr($value, $offset);
+
+                    break;
+                }
+
+                if ($literal !== '') {
+                    $parts[] = $literal;
+                    $literal = '';
+                }
+
+                $parts[] = $this->parseExpression(substr($value, $offset + 1, $close - $offset - 1));
+                $offset  = $close + 1;
+
+                continue;
             }
 
-            $close = strpos($value, '}', $open);
-            if ($close === false) {
-                $parts[] = substr($value, $open);
+            $literal .= $ch;
 
-                break;
-            }
+            $offset++;
+        }
 
-            $expr    = substr($value, $open + 1, $close - $open - 1);
-            $parts[] = $this->parseExpression($expr);
-            $offset  = $close + 1;
+        if ($literal !== '') {
+            $parts[] = $literal;
         }
 
         return $parts;

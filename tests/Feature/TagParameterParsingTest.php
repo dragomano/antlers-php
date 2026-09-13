@@ -92,7 +92,7 @@ it('processes all escape sequences in tag parameters', function (): void {
     expect($engine->render('{{ testbox val="\r" }}'))->toBe('0d');
     expect($engine->render('{{ testbox val="\\\\" }}'))->toBe('5c');
     expect($engine->render('{{ testbox val="\"" }}'))->toBe('22');
-    expect($engine->render("{{ testbox val='\\' }}"))->toBe('27');
+    expect($engine->render("{{ testbox val='a\\'b' }}"))->toBe('612762');
     expect($engine->render('{{ testbox val="\0" }}'))->toBe('00');
 });
 

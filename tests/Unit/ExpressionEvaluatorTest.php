@@ -5,21 +5,31 @@ declare(strict_types=1);
 use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 use Bugo\Antlers\GuardPolicy;
 use Bugo\Antlers\Modifiers\ModifierRegistry;
+use Bugo\Antlers\Nodes\AssignmentNode;
 use Bugo\Antlers\Nodes\BinaryOpNode;
 use Bugo\Antlers\Nodes\BooleanNode;
 use Bugo\Antlers\Nodes\CollectionGroupArgument;
 use Bugo\Antlers\Nodes\CollectionOperationNode;
 use Bugo\Antlers\Nodes\CollectionOperatorNode;
 use Bugo\Antlers\Nodes\CollectionSortArgument;
+use Bugo\Antlers\Nodes\NullNode;
 use Bugo\Antlers\Nodes\NumberNode;
 use Bugo\Antlers\Nodes\StringValueNode;
+use Bugo\Antlers\Nodes\TagNode;
+use Bugo\Antlers\Nodes\TagSubExpressionNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
 use Bugo\Antlers\Nodes\VariableNode;
+use Bugo\Antlers\Nodes\VoidNode;
+use Bugo\Antlers\Parser\DocumentParser;
+use Bugo\Antlers\Parser\LanguageParser;
+use Bugo\Antlers\Runtime\ConditionProcessor;
 use Bugo\Antlers\Runtime\ExpressionEvaluator;
 use Bugo\Antlers\Runtime\ModifierRunner;
+use Bugo\Antlers\Runtime\NodeProcessor;
 use Bugo\Antlers\Runtime\PathDataManager;
 use Bugo\Antlers\Runtime\RuntimeOptions;
 use Bugo\Antlers\Runtime\VoidValue;
+use Bugo\Antlers\Tags\TagRegistry;
 
 function expressionEvaluator(bool $strict = false, ?GuardPolicy $guardPolicy = null): ExpressionEvaluator
 {
@@ -35,6 +45,162 @@ function expressionEvaluator(bool $strict = false, ?GuardPolicy $guardPolicy = n
 }
 
 describe('ExpressionEvaluator', function (): void {
+    it('requires a processor to evaluate tag subexpressions', function (): void {
+        $node = new TagSubExpressionNode(new TagNode('example'));
+
+        expect(fn(): mixed => expressionEvaluator()->evaluate($node, []))
+            ->toThrow(AntlersRuntimeException::class, 'NodeProcessor not set for tag sub-expression evaluation');
+    });
+
+    describe('tag subexpressions', function (): void {
+        beforeEach(function (): void {
+            $this->tags    = new TagRegistry();
+            $this->runtime = new RuntimeOptions();
+            $paths         = new PathDataManager();
+
+            $this->evaluator = new ExpressionEvaluator(
+                $paths,
+                new ModifierRunner(new ModifierRegistry(), $this->runtime),
+                $this->runtime,
+            );
+
+            $this->processor = new NodeProcessor(
+                new DocumentParser(),
+                $this->evaluator,
+                new ConditionProcessor($this->evaluator),
+                $this->tags,
+                $paths,
+                new LanguageParser(),
+                $this->runtime,
+            );
+        });
+
+        it('preserves raw tag results and only stringifies ordinary tag output', function (mixed $value): void {
+            $this->tags->register('result', static fn(): mixed => $value);
+
+            $tag = new TagNode('result');
+
+            expect($this->evaluator->evaluate(new TagSubExpressionNode($tag), []))->toBe($value)
+                ->and($this->processor->reduce([$tag]))->toBe($this->evaluator->stringify($value));
+        })->with([
+            'array'       => [[['title' => 'First'], ['title' => 'Second']]],
+            'empty array' => [[]],
+            'true'        => [true],
+            'false'       => [false],
+            'null'        => [null],
+        ]);
+
+        it('shares parameter evaluation and the active processor with ordinary tags', function (): void {
+            $this->processor->setGlobalData(['global' => 'visible']);
+
+            $this->tags->register('nested', static fn(): array => ['raw' => true]);
+            $this->tags->register('probe', function ($params, $data, $processor, $method, $children): bool {
+                expect($params)->toBe([
+                    'value' => 7,
+                    'null' => null,
+                    'false' => false,
+                    'nested' => ['raw' => true],
+                    'assigned' => 'saved',
+                ])
+                    ->and($data)->toBe(['global' => 'visible', 'input' => 7])
+                    ->and($processor)->toBe($this->processor)
+                    ->and($method)->toBe('inspect')
+                    ->and($children)->toBe([]);
+
+                $processor->storeSection('shared', 'section');
+
+                return true;
+            });
+
+            $tag = new TagNode('probe', 'inspect', [
+                'value'    => new VariableNode('input'),
+                'void'     => new VoidNode(),
+                'null'     => new NullNode(),
+                'false'    => new BooleanNode(false),
+                'nested'   => new TagSubExpressionNode(new TagNode('nested')),
+                'assigned' => new AssignmentNode('written', new StringValueNode('saved')),
+            ]);
+
+            foreach ([$tag, new TagSubExpressionNode($tag)] as $node) {
+                expect($this->processor->reduce([$node, new VariableNode('written')], ['input' => 7]))
+                    ->toBe('truesaved')
+                    ->and($this->processor->yieldSection('shared'))->toBe('section');
+            }
+        });
+
+        it('shares unknown and guarded tag policies before evaluating parameters', function (bool $strict, bool $guarded): void {
+            $this->runtime->strict = $strict;
+
+            $calls = 0;
+
+            $this->tags->register('parameter', function () use (&$calls): void {
+                $calls++;
+            });
+
+            if ($guarded) {
+                $this->runtime->guardPolicy = new GuardPolicy(tags: ['blocked']);
+                $this->tags->register('blocked', function () use (&$calls): void {
+                    $calls++;
+                });
+            }
+
+            $tag = new TagNode('blocked', parameters: [
+                'value' => new TagSubExpressionNode(new TagNode('parameter')),
+            ]);
+
+            $node    = new TagSubExpressionNode($tag);
+            $message = $guarded ? 'Guarded tag: "blocked"' : 'Unknown tag: "blocked"';
+
+            if ($strict) {
+                expect(fn(): mixed => $this->evaluator->evaluate($node, []))
+                    ->toThrow(AntlersRuntimeException::class, $message)
+                    ->and(fn(): string => $this->processor->reduce([$tag]))
+                    ->toThrow(AntlersRuntimeException::class, $message);
+            } else {
+                expect($this->evaluator->evaluate($node, []))->toBe('')
+                    ->and($this->processor->reduce([$tag]))->toBe('');
+            }
+
+            expect($calls)->toBe(0);
+        })->with([false, true])->with([false, true]);
+
+        it('restores the outer tag context after nested subexpression failures', function (): void {
+            $this->tags->register('inner', static function (): never {
+                throw new AntlersRuntimeException('Inner failure');
+            });
+
+            $this->tags->register('outer', function ($params, $data, NodeProcessor $processor): string {
+                expect(fn(): mixed => $this->evaluator->evaluate(
+                    new TagSubExpressionNode(new TagNode('inner')),
+                    $data,
+                ))->toThrow(AntlersRuntimeException::class, 'Inner failure');
+
+                return $processor->renderOnce(null, static fn(): string => 'once');
+            });
+
+            $first = new TagNode('outer');
+            $first->line = 3;
+
+            $second = new TagNode('outer');
+            $second->line = 4;
+
+            expect($this->processor->reduce([
+                new TagSubExpressionNode($first),
+                new TagSubExpressionNode($first),
+                new TagSubExpressionNode($second),
+            ]))->toBe('onceonce');
+        });
+
+        it('attaches the enclosing statement line to tag subexpression failures', function (): void {
+            $this->runtime->strict = true;
+
+            $node = new AssignmentNode('result', new TagSubExpressionNode(new TagNode('missing')));
+            $node->line = 12;
+
+            expect(fn(): string => $this->processor->reduce([$node]))
+                ->toThrow(AntlersRuntimeException::class, 'Unknown tag: "missing" on line 12');
+        });
+    });
     it('evaluates guarded variables, interpolated strings and short-circuit operators', function (): void {
         $guarded = expressionEvaluator(true, new GuardPolicy(variables: ['secret']));
         $strict  = expressionEvaluator(true);
@@ -108,9 +274,11 @@ describe('ExpressionEvaluator', function (): void {
         $pluckObject = new CollectionOperationNode(new VariableNode('items'), [
             new CollectionOperatorNode('pluck', [new StringValueNode('name')]),
         ]);
+
         $pluckScalar = new CollectionOperationNode(new VariableNode('items'), [
             new CollectionOperatorNode('pluck', [new VariableNode('value')]),
         ]);
+
         $whereAlias = new CollectionOperationNode(new VariableNode('items'), [
             new CollectionOperatorNode(
                 'where',
@@ -119,20 +287,25 @@ describe('ExpressionEvaluator', function (): void {
                 'entry',
             ),
         ]);
+
         $sortBool = new CollectionOperationNode(new VariableNode('items'), [
             new CollectionOperatorNode('orderby', [new CollectionSortArgument(new StringValueNode('active'))]),
         ]);
+
         $sortObject = new CollectionOperationNode(new VariableNode('items'), [
             new CollectionOperatorNode('orderby', [
                 new CollectionSortArgument(new StringValueNode('meta'), new StringValueNode('sideways')),
             ]),
         ]);
+
         $sortInvalid = new CollectionOperationNode(new VariableNode('items'), [
             new CollectionOperatorNode('orderby', [new StringValueNode('ignored')]),
         ]);
+
         $groupRole = new CollectionOperationNode(new VariableNode('items'), [
             new CollectionOperatorNode('groupby', [new CollectionGroupArgument(new StringValueNode('role'))]),
         ]);
+
         $groupInvalid = new CollectionOperationNode(new VariableNode('items'), [
             new CollectionOperatorNode('groupby', [new StringValueNode('ignored')]),
         ]);

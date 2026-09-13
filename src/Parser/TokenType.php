@@ -60,10 +60,11 @@ enum TokenType: string
     case QQQ      = 'T_QQQ';      // ??? falls back only on null
 
     // Grouping and array access
-    case LParen   = 'T_LPAREN';   // (
-    case RParen   = 'T_RPAREN';   // )
-    case LBracket = 'T_LBRACKET'; // [
-    case RBracket = 'T_RBRACKET'; // ]
+    case LParen        = 'T_LPAREN';   // (
+    case RParen        = 'T_RPAREN';   // )
+    case LBracket      = 'T_LBRACKET'; // [
+    case RBracket      = 'T_RBRACKET'; // ]
+    case TagExpression = 'T_TAG_EXPRESSION';
 
     // Structure
     case Comma     = 'T_COMMA';     // ,

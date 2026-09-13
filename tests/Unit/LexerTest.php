@@ -199,4 +199,15 @@ describe('Lexer', function (): void {
         expect($tokens[0]->type)->toBe(TokenType::String)
             ->and($tokens[0]->value)->toBe("a\0b");
     });
+
+    it('emits one tag expression token for a brace sub-expression', function (): void {
+        $tokens = $this->lexer->tokenize('x = {greet name="a b"}');
+        expect($tokens[2]->type)->toBe(TokenType::TagExpression)
+            ->and($tokens[2]->value)->toBe('greet name="a b"');
+    });
+
+    it('throws a syntax exception for an unclosed tag sub-expression', function (): void {
+        expect(fn() => $this->lexer->tokenize('{greet'))
+            ->toThrow(AntlersSyntaxException::class, 'Unclosed tag sub-expression "{" on line 1');
+    });
 });

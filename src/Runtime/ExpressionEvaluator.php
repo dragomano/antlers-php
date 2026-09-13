@@ -21,6 +21,7 @@ use Bugo\Antlers\Nodes\NullNode;
 use Bugo\Antlers\Nodes\NumberNode;
 use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\StringValueNode;
+use Bugo\Antlers\Nodes\TagSubExpressionNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Nodes\TruthyCoalesceNode;
 use Bugo\Antlers\Nodes\UnaryOpNode;
@@ -30,13 +31,20 @@ use Bugo\Antlers\Nodes\VoidNode;
 /**
  * Evaluates expression AST nodes against a data scope.
  */
-final readonly class ExpressionEvaluator
+final class ExpressionEvaluator
 {
+    private ?NodeProcessor $processor = null;
+
     public function __construct(
-        private PathDataManager $paths,
-        private ModifierRunner $modifiers,
-        private RuntimeOptions $options,
+        private readonly PathDataManager $paths,
+        private readonly ModifierRunner $modifiers,
+        private readonly RuntimeOptions $options,
     ) {}
+
+    public function setProcessor(NodeProcessor $processor): void
+    {
+        $this->processor = $processor;
+    }
 
     /**
      * @param array<string, mixed> $scope
@@ -61,6 +69,7 @@ final readonly class ExpressionEvaluator
             $node instanceof TruthyCoalesceNode      => $this->evalTruthyCoalesce($node, $scope, $assignmentWriter),
             $node instanceof ModifierChainNode       => $this->evalModifierChain($node, $scope, $assignmentWriter),
             $node instanceof CollectionOperationNode => $this->evalCollectionOperation($node, $scope, $assignmentWriter),
+            $node instanceof TagSubExpressionNode    => $this->evalTagSubExpression($node, $scope),
             default                                  => throw new AntlersRuntimeException(
                 'Cannot evaluate node of type: ' . $node::class,
             ),
@@ -752,6 +761,18 @@ final readonly class ExpressionEvaluator
         }
 
         return strtolower($this->stringify($value)) === 'desc' ? 'desc' : 'asc';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function evalTagSubExpression(TagSubExpressionNode $node, array $scope): mixed
+    {
+        if (! $this->processor instanceof NodeProcessor) {
+            throw new AntlersRuntimeException('NodeProcessor not set for tag sub-expression evaluation');
+        }
+
+        return $this->processor->callTag($node->tag, $scope);
     }
 
     private function collectionExpressionArgument(CollectionOperatorNode $operator): AbstractNode

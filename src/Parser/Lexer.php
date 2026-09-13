@@ -191,6 +191,20 @@ final class Lexer
                 continue;
             }
 
+            if ($ch === '{') {
+                $start = $this->pos;
+                $end = BraceScanner::closingBrace($this->input, $start);
+                if ($end === null) {
+                    throw new AntlersSyntaxException('Unclosed tag sub-expression "{"', $this->lineAt($start), $this->input);
+                }
+
+                $this->push(TokenType::TagExpression, substr($this->input, $start + 1, $end - $start - 1), $start);
+
+                $this->pos = $end + 1;
+
+                continue;
+            }
+
             // Single-char tokens
             match ($ch) {
                 '$'     => $this->add(TokenType::Dollar, '$'),
@@ -397,6 +411,7 @@ final class Lexer
             TokenType::Null,
             TokenType::RParen,
             TokenType::RBracket,
+            TokenType::TagExpression,
         );
     }
 }
