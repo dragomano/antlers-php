@@ -18,6 +18,15 @@ final class CoreModifiers
 {
     public static function register(ModifierRegistry $registry, RuntimeOptions $options): void
     {
+        StringModifiers::register($registry, $options);
+        ArrayModifiers::register($registry, $options);
+        MathModifiers::register($registry, $options);
+        UtilityModifiers::register($registry, $options);
+        MarkupModifiers::register($registry, $options);
+    }
+
+    public static function registerAll(ModifierRegistry $registry, RuntimeOptions $options): void
+    {
         $registry->register('upper', static fn(mixed $v): string => self::unicode($v)->upper()->toString());
 
         $registry->register('lower', static fn(mixed $v): string => self::unicode($v)->lower()->toString());

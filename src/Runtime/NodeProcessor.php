@@ -29,30 +29,25 @@ use Bugo\Antlers\Tags\TagRegistry;
  */
 final class NodeProcessor
 {
+    private readonly TemplateLocator $templateLocator;
+
+    private readonly TemplateRepository $templateRepository;
+
+    private readonly LoopRenderer $loopRenderer;
+
+    private readonly SlotRenderer $slotRenderer;
+
+    private readonly TagInvoker $tagInvoker;
+
     /** @var array<string, mixed> */
     private array $globalData = [];
 
-    private Scope $scope;
+    private ?RenderContext $context = null;
 
-    private RenderState $state;
-
-    /** Nesting depth of reduce(); zero means the next call starts a new render. */
-    private int $depth = 0;
-
-    /** @var string[] */
-    private array $templatePathStack = [];
-
-    /** @var string[] */
-    private array $templateRenderStack = [];
-
-    /** @var string[] */
-    private array $viewPaths = [];
-
-    /** @var list<array{name: string, method: string, line: int, signature: string}> */
-    private array $tagContextStack = [];
+    private RenderContext $standaloneContext;
 
     public function __construct(
-        private readonly DocumentParser $documentParser,
+        DocumentParser $documentParser,
         private readonly ExpressionEvaluator $evaluator,
         private readonly ConditionProcessor $conditions,
         private readonly TagRegistry $tags,
@@ -60,8 +55,31 @@ final class NodeProcessor
         private readonly LanguageParser $parser,
         private readonly RuntimeOptions $options,
     ) {
-        $this->scope = new Scope();
-        $this->state = new RenderState();
+        $this->templateLocator    = new TemplateLocator();
+        $this->templateRepository = new TemplateRepository($documentParser, $this->templateLocator);
+        $this->loopRenderer       = new LoopRenderer(
+            fn(array $scope, array $children): string
+                => $this->renderChildrenWithScope($scope, $children, $this->context()),
+        );
+
+        $this->slotRenderer = new SlotRenderer(
+            $this->parser,
+            $this->evaluator,
+            fn(array $children, array $data): string => $this->renderFragment($children, $data),
+            fn(AbstractNode $node, array $scope): mixed
+                => $this->evaluateNodeValue($node, $scope, $this->context()),
+        );
+
+        $this->tagInvoker = new TagInvoker(
+            $this->tags,
+            $this->options,
+            fn(AbstractNode $node, array $scope): mixed
+                => $this->evaluateNodeValue($node, $scope, $this->context()),
+            fn(string $name, string $method, array $parameters, array $scope, array $children): mixed
+                => $this->tags->handle($name, $method, $parameters, $scope, $this, $children),
+        );
+
+        $this->standaloneContext = new RenderContext($this->globalData);
 
         $this->evaluator->setProcessor($this);
     }
@@ -74,17 +92,10 @@ final class NodeProcessor
         $this->globalData = $data;
     }
 
-    /**
-     * @param string|string[] $paths
-     */
+    /** @param string|string[] $paths */
     public function setViewPaths(string|array $paths): void
     {
-        $paths = is_array($paths) ? $paths : [$paths];
-
-        $this->viewPaths = array_values(array_filter(array_map(
-            trim(...),
-            $paths,
-        ), static fn(string $path): bool => $path !== ''));
+        $this->templateLocator->setViewPaths($paths);
     }
 
     public function markdownRenderer(): MarkdownRendererInterface
@@ -111,39 +122,37 @@ final class NodeProcessor
     }
 
     /**
-     * Render a list of nodes with the given data scope.
-     *
      * @param AbstractNode[] $nodes
      * @param array<string, mixed> $data
      */
     public function reduce(array $nodes, array $data = []): string
     {
-        if ($this->depth === 0) {
-            $this->scope = new Scope($this->globalData);
-            $this->state = new RenderState();
-        }
-
-        $this->depth++;
-        $this->scope->push($data);
+        $isRoot  = ! $this->context instanceof RenderContext;
+        $context = $this->context ??= new RenderContext($this->globalData);
 
         try {
-            return $this->processNodes($nodes);
+            return $context->renderFrame(
+                $data,
+                fn(): string => $this->processNodes($nodes, $context),
+            );
         } finally {
-            $this->scope->pop();
-            $this->depth--;
+            if ($isRoot) {
+                $this->standaloneContext = $this->context;
+                $this->context = null;
+            }
         }
     }
 
     /**
      * @param AbstractNode[] $nodes
      */
-    private function processNodes(array $nodes): string
+    private function processNodes(array $nodes, RenderContext $context): string
     {
         $output = '';
 
         foreach ($nodes as $node) {
             try {
-                $output .= $this->processNode($node, $this->scope->all());
+                $output .= $this->processNode($node, $context->scope->all(), $context);
             } catch (AntlersRuntimeException $e) {
                 throw $e->atLine($node->line);
             }
@@ -155,7 +164,7 @@ final class NodeProcessor
     /**
      * @param array<string, mixed> $scope
      */
-    private function processNode(AbstractNode $node, array $scope): string
+    private function processNode(AbstractNode $node, array $scope, RenderContext $context): string
     {
         // Literal text — pass through unchanged
         if ($node instanceof LiteralNode) {
@@ -164,33 +173,33 @@ final class NodeProcessor
 
         // Parsed typed nodes from LanguageParser
         if ($node instanceof ConditionNode) {
-            return $this->processCondition($node, $scope);
+            return $this->processCondition($node, $scope, $context);
         }
 
         if ($node instanceof LoopNode) {
-            return $this->processLoop($node, $scope);
+            return $this->processLoop($node, $scope, $context);
         }
 
         if ($node instanceof SetNode) {
-            $this->scope->write($node->variableName, $this->evaluateNodeValue($node->value, $scope));
+            $context->scope->write($node->variableName, $this->evaluateNodeValue($node->value, $scope, $context));
 
             return '';
         }
 
         if ($node instanceof AssignmentNode) {
-            $result = $this->evaluateNodeResult($node->value, $scope);
+            $result = $this->evaluateNodeResult($node->value, $scope, $context);
 
-            $this->scope->write($node->variableName, $result->value);
+            $context->scope->write($node->variableName, $result->value);
 
             if ($node->children === []) {
                 return '';
             }
 
-            return $this->processPairedValue($result->value, $node->children);
+            return $this->processPairedValue($result->value, $node->children, $context);
         }
 
         if ($node instanceof SequenceNode) {
-            $result = $this->evaluateNodeResult($node, $scope);
+            $result = $this->evaluateNodeResult($node, $scope, $context);
 
             $lastStatementKey = array_key_last($node->statements);
             $lastStatement    = $lastStatementKey !== null ? $node->statements[$lastStatementKey] : null;
@@ -212,25 +221,30 @@ final class NodeProcessor
             || $node instanceof NullCoalesceNode
             || $node instanceof VariableNode
         ) {
-            return $this->stringifyEvaluatedNode($node, $scope);
+            return $this->stringifyEvaluatedNode($node, $scope, $context);
         }
 
         // Raw AntlersNode — needs parsing first
         if ($node instanceof AntlersNode) {
-            return $this->processRawAntlersNode($node, $scope);
+            return $this->processRawAntlersNode($node, $scope, $context);
         }
 
         // All other expression nodes
-        return $this->stringifyEvaluatedNode($node, $scope);
+        return $this->stringifyEvaluatedNode($node, $scope, $context);
     }
 
     /**
      * @param array<string, mixed> $scope
      */
-    private function processRawAntlersNode(AntlersNode $node, array $scope): string
+    private function processRawAntlersNode(AntlersNode $node, array $scope, RenderContext $context): string
     {
         if ($node->isClosingTag) {
             return '';
+        }
+
+        $recursive = $this->recursiveDirective($node->rawContent);
+        if ($recursive !== null) {
+            return $this->processRecursive($recursive['path'], $recursive['maxDepth'], $context);
         }
 
         // Noparse block — render children as raw text
@@ -245,19 +259,27 @@ final class NodeProcessor
 
             // Could be a paired tag in the registry
             if ($parsed instanceof TagNode && $this->tags->has($parsed->name)) {
-                return $this->processNode($parsed, $scope);
+                return $this->processNode($parsed, $scope, $context);
             }
 
             if ($parsed instanceof AssignmentNode) {
-                return $this->processNode($parsed, $scope);
+                return $this->processNode($parsed, $scope, $context);
             }
 
             if ($parsed instanceof VariableNode) {
-                return $this->processPairedVariable($parsed->path, $node->children, $scope);
+                return $this->processPairedValue(
+                    $this->resolvePathResult($parsed->path, $scope)->value,
+                    $node->children,
+                    $context,
+                );
             }
 
             // Otherwise: paired variable loop
-            return $this->processPairedVariable($node->rawContent, $node->children, $scope);
+            return $this->processPairedValue(
+                $this->resolvePathResult($node->rawContent, $scope)->value,
+                $node->children,
+                $context,
+            );
         }
 
         // Simple identifier that is a registered tag ({{ myTag }})
@@ -277,39 +299,39 @@ final class NodeProcessor
         // Parse the node into a typed AST node and process it
         $parsed = $this->parser->parseNode($node);
 
-        return $this->processNode($parsed, $scope);
+        return $this->processNode($parsed, $scope, $context);
     }
 
     /**
      * @param array<string, mixed> $scope
      */
-    private function processCondition(ConditionNode $node, array $scope): string
+    private function processCondition(ConditionNode $node, array $scope, RenderContext $context): string
     {
-        $children = $this->conditions->process($node, $scope, $this->assignmentWriter());
+        $children = $this->conditions->process($node, $scope, $this->assignmentWriter($context));
         if ($children === []) {
             return '';
         }
 
         // A condition is not a scope: it adds no variables, and opening a frame
         // here would throw away assignments made inside the branch.
-        return $this->processNodes($children);
+        return $this->processNodes($children, $context);
     }
 
     /**
      * @param array<string, mixed> $scope
      */
-    private function processLoop(LoopNode $node, array $scope): string
+    private function processLoop(LoopNode $node, array $scope, RenderContext $context): string
     {
         if ($node->type === 'foreach') {
-            return $this->processForeach($node, $scope);
+            return $this->processForeach($node, $scope, $context);
         }
 
         if ($node->type === 'for') {
-            return $this->processFor($node, $scope);
+            return $this->processFor($node, $scope, $context);
         }
 
         if ($node->type === 'paired') {
-            return $this->iterateItems(
+            return $this->loopRenderer->renderItems(
                 $this->resolvePathResult($node->variablePath ?? '', $scope)->value,
                 $node->children,
             );
@@ -321,112 +343,34 @@ final class NodeProcessor
     /**
      * @param array<string, mixed> $scope
      */
-    private function processForeach(LoopNode $node, array $scope): string
+    private function processForeach(LoopNode $node, array $scope, RenderContext $context): string
     {
         if (! $node->iterable instanceof AbstractNode) {
             return '';
         }
 
-        $items = $this->evaluateNodeValue($node->iterable, $scope);
+        $items = $this->evaluateNodeValue($node->iterable, $scope, $context);
 
         if (! is_iterable($items)) {
             return '';
         }
 
-        return $this->iterateItems($items, $node->children, $node->alias, $node->keyAlias);
+        return $this->loopRenderer->renderItems($items, $node->children, $node->alias, $node->keyAlias);
     }
 
     /**
      * @param array<string, mixed> $scope
      */
-    private function processFor(LoopNode $node, array $scope): string
+    private function processFor(LoopNode $node, array $scope, RenderContext $context): string
     {
         if (! $node->from instanceof AbstractNode || ! $node->to instanceof AbstractNode) {
             return '';
         }
 
-        $from = $this->toInt($this->evaluateNodeValue($node->from, $scope));
-        $to   = $this->toInt($this->evaluateNodeValue($node->to, $scope));
+        $from = ValueCoercion::toInt($this->evaluateNodeValue($node->from, $scope, $context));
+        $to   = ValueCoercion::toInt($this->evaluateNodeValue($node->to, $scope, $context));
 
-        return $this->renderCounterRange($from, $to, $node->children);
-    }
-
-    /**
-     * @param AbstractNode[] $children
-     */
-    private function iterateItems(
-        mixed $items,
-        array $children,
-        ?string $alias = null,
-        ?string $keyAlias = null,
-    ): string {
-        if (! is_iterable($items)) {
-            return '';
-        }
-
-        $itemArray  = $this->iterableToArray($items) ?? [];
-        $itemValues = array_values($itemArray);
-        $total      = count($itemArray);
-        $output     = '';
-        $index      = 0;
-
-        array_walk($itemArray, function (mixed $item, int|string $key) use (
-            &$children,
-            &$output,
-            &$itemValues,
-            &$total,
-            &$index,
-            $alias,
-            $keyAlias,
-        ): void {
-            $index++;
-
-            $loopVars = [
-                'count' => $index,
-                'index' => $index - 1,
-                'total' => $total,
-                'first' => $index === 1,
-                'last'  => $index === $total,
-                'odd'   => $index % 2 !== 0,
-                'even'  => $index % 2 === 0,
-                'key'   => $key,
-                'prev'  => $this->normalizeRelativeLoopItem($index > 1 ? ($itemValues[$index - 2] ?? null) : null),
-                'next'  => $this->normalizeRelativeLoopItem($index < $total ? ($itemValues[$index] ?? null) : null),
-            ];
-
-            $itemScope = $this->extractItemScope($item);
-            $loopVars = $itemScope !== null ? array_merge($loopVars, $itemScope) : $this->withLoopValue($loopVars, 'value', $item);
-
-            // Named alias
-            if ($alias !== null) {
-                $loopVars = $this->withLoopValue($loopVars, $alias, $item);
-            }
-
-            if ($keyAlias !== null) {
-                $loopVars[$keyAlias] = $key;
-            }
-
-            $output .= $this->renderChildrenWithScope($loopVars, $children);
-        });
-
-        return $output;
-    }
-
-    /**
-     * @return array<array-key, mixed>|null
-     */
-    private function normalizeRelativeLoopItem(mixed $item): ?array
-    {
-        if ($item === null) {
-            return null;
-        }
-
-        $itemScope = $this->extractItemScope($item);
-        if ($itemScope !== null) {
-            return $itemScope;
-        }
-
-        return ['value' => $item];
+        return $this->loopRenderer->renderCounter($from, $to, $node->children);
     }
 
     /**
@@ -440,25 +384,7 @@ final class NodeProcessor
     /** @param array<string, mixed> $scope */
     public function callTag(TagNode $node, array $scope): mixed
     {
-        if (! $this->tags->has($node->name)) {
-            return $this->options->fail(sprintf('Unknown tag: "%s"', $node->name));
-        }
-
-        if ($this->options->guardPolicy->guardsTag($node->name)) {
-            return $this->options->fail(sprintf('Guarded tag: "%s"', $node->name));
-        }
-
-        $params = array_map(
-            fn(AbstractNode $paramNode): mixed => $this->evaluateNodeValue($paramNode, $scope),
-            $node->parameters,
-        );
-
-        $params = array_filter(
-            $params,
-            static fn(mixed $value): bool => ! $value instanceof VoidValue,
-        );
-
-        return $this->handleTagResult($node, $params, $scope)->value;
+        return $this->tagInvoker->call($node, $scope);
     }
 
     /**
@@ -472,35 +398,44 @@ final class NodeProcessor
     {
         $value = $this->resolvePathResult($path, $scope);
 
-        return $this->processPairedValue($value->value, $children);
+        return $this->processPairedValue($value->value, $children, $this->context());
     }
 
     /**
      * @param AbstractNode[] $children
      */
-    private function processPairedValue(mixed $value, array $children): string
+    private function processPairedValue(mixed $value, array $children, RenderContext $context): string
     {
-        $items = $this->iterableToArray($value);
+        return $context->recursion->within(
+            $children,
+            fn(): string => $this->renderPairedValue($value, $children, $context),
+        );
+    }
+
+    /** @param AbstractNode[] $children */
+    private function renderPairedValue(mixed $value, array $children, RenderContext $context): string
+    {
+        $items = ValueCoercion::toArray($value);
         if ($items !== null && $items !== []) {
             // Gaps left by array_filter() or unset() and 1-based data are still a
             // collection; only string keys mean "one item, use its fields".
             if (array_filter(array_keys($items), is_string(...)) === []) {
-                return $this->iterateItems($items, $children);
+                return $this->loopRenderer->renderItems($items, $children);
             }
 
             // Single associative item — render with merged scope
-            return $this->renderChildrenWithScope($this->normalizeScopeFrame($items), $children);
+            return $this->renderChildrenWithScope(ValueCoercion::stringKeys($items), $children, $context);
         }
 
-        $itemScope = $this->extractItemScope($value);
+        $itemScope = ValueCoercion::toScopeFrame($value);
         if ($itemScope !== null && $itemScope !== []) {
-            return $this->renderChildrenWithScope($itemScope, $children);
+            return $this->renderChildrenWithScope($itemScope, $children, $context);
         }
 
         if ($this->evaluator->isTruthy($value)) {
             // Scalar or object with nothing to add to the scope: render in place,
             // so the body behaves like a condition and keeps its assignments.
-            return $this->processNodes($children);
+            return $this->processNodes($children, $context);
         }
 
         return '';
@@ -511,51 +446,29 @@ final class NodeProcessor
      */
     public function renderTemplate(string $template, array $data = []): string
     {
-        $nodes = $this->documentParser->parse($template);
+        $nodes = $this->templateRepository->parse($template);
 
         return $this->reduce($nodes, $data);
     }
 
-    /**
-     * @param array<string, mixed> $data
-     */
+    /** @param array<string, mixed> $data */
     public function renderTemplateFile(string $path, array $data = []): string
     {
-        $resolved = $this->resolveTemplatePath($path);
-        if ($resolved === '') {
-            throw new AntlersRuntimeException('Template file is outside the configured template roots: ' . $path);
-        }
-
-        if (! is_file($resolved)) {
-            throw new AntlersRuntimeException('Template file not found: ' . $resolved);
-        }
-
-        if (in_array($resolved, $this->templateRenderStack, true)) {
-            throw new AntlersRuntimeException('Recursive template rendering detected: ' . $resolved);
-        }
-
-        $this->templateRenderStack[] = $resolved;
-        $this->templatePathStack[]   = dirname($resolved);
-
-        try {
-            return $this->renderTemplate((string) file_get_contents($resolved), $data);
-        } finally {
-            array_pop($this->templatePathStack);
-            array_pop($this->templateRenderStack);
-        }
+        return $this->templateRepository->renderFile(
+            $path,
+            $data,
+            fn(array $nodes, array $scope): string => $this->reduce($nodes, $scope),
+        );
     }
 
-    /**
-     * @param array<string, mixed> $data
-     */
+    /** @param array<string, mixed> $data */
     public function renderView(string $name, array $data = []): string
     {
-        $resolved = $this->resolveViewPath($name);
-        if (! is_file($resolved)) {
-            throw new AntlersRuntimeException('Template view not found: ' . $name);
-        }
-
-        return $this->renderTemplateFile($resolved, $data);
+        return $this->templateRepository->renderView(
+            $name,
+            $data,
+            fn(array $nodes, array $scope): string => $this->reduce($nodes, $scope),
+        );
     }
 
     /**
@@ -574,26 +487,7 @@ final class NodeProcessor
      */
     public function renderSlots(array $children, array $data = []): array
     {
-        $defaultChildren = [];
-        $namedSlots      = [];
-
-        foreach ($children as $child) {
-            $slot = $this->resolveSlotDefinition($child, $data);
-
-            if ($slot === null) {
-                $defaultChildren[] = $child;
-
-                continue;
-            }
-
-            $namedSlots[$slot['name']] = ($namedSlots[$slot['name']] ?? '')
-                . $this->renderFragment($slot['children'], $data);
-        }
-
-        return [
-            'default' => $this->renderFragment($defaultChildren, $data),
-            'named'   => $namedSlots,
-        ];
+        return $this->slotRenderer->render($children, $data);
     }
 
     /**
@@ -605,65 +499,33 @@ final class NodeProcessor
         ?string $alias = null,
         ?string $keyAlias = null,
     ): string {
-        return $this->iterateItems($items, $children, $alias, $keyAlias);
+        return $this->loopRenderer->renderItems($items, $children, $alias, $keyAlias);
     }
 
-    /**
-     * @param AbstractNode[] $children
-     */
+    /** @param AbstractNode[] $children */
     public function renderCounterLoop(int $from, int $to, array $children): string
     {
-        return $this->renderCounterRange($from, $to, $children);
-    }
-
-    /**
-     * @param AbstractNode[] $children
-     */
-    private function renderCounterRange(int $from, int $to, array $children): string
-    {
-        $output = '';
-        $step   = $from <= $to ? 1 : -1;
-        $total  = abs($to - $from) + 1;
-        $index  = 0;
-
-        for ($i = $from; $step > 0 ? $i <= $to : $i >= $to; $i += $step) {
-            $index++;
-
-            $loopVars = [
-                'count' => $index,
-                'index' => $index - 1,
-                'total' => $total,
-                'first' => $index === 1,
-                'last'  => $index === $total,
-                'odd'   => $index % 2 !== 0,
-                'even'  => $index % 2 === 0,
-                'value' => $i,
-            ];
-
-            $output .= $this->renderChildrenWithScope($loopVars, $children);
-        }
-
-        return $output;
+        return $this->loopRenderer->renderCounter($from, $to, $children);
     }
 
     public function storeSection(string $name, string $content, bool $append = false): void
     {
-        $this->state->storeSection($name, $content, $append);
+        $this->context()->state->storeSection($name, $content, $append);
     }
 
     public function yieldSection(string $name): string
     {
-        return $this->state->section($name);
+        return $this->context()->state->section($name);
     }
 
     public function storeStack(string $name, string $content, bool $prepend = false): void
     {
-        $this->state->pushStack($name, $content, $prepend);
+        $this->context()->state->pushStack($name, $content, $prepend);
     }
 
     public function yieldStack(string $name): string
     {
-        return $this->state->stack($name);
+        return $this->context()->state->stack($name);
     }
 
     /**
@@ -671,12 +533,12 @@ final class NodeProcessor
      */
     public function renderOnce(?string $key, callable $renderer): string
     {
-        return $this->state->markOnce($this->resolveOnceKey($key)) ? $renderer() : '';
+        return $this->context()->state->markOnce($this->resolveOnceKey($key)) ? $renderer() : '';
     }
 
     public function nextIncrement(string $name, int $from = 1, int $step = 1): int
     {
-        return $this->state->nextIncrement($name, $from, $step);
+        return $this->context()->state->nextIncrement($name, $from, $step);
     }
 
     /**
@@ -684,56 +546,17 @@ final class NodeProcessor
      */
     public function nextSwitchValue(string $name, array $values): mixed
     {
-        return $values[$this->state->nextSwitchIndex($name) % count($values)];
+        return $values[$this->context()->state->nextSwitchIndex($name) % count($values)];
     }
 
     public function resolveTemplatePath(string $path): string
     {
-        if ($path === '') {
-            return $path;
-        }
-
-        $roots = $this->templateSearchRoots();
-
-        if ($this->isAbsolutePath($path)) {
-            if (! $this->hasConfiguredViewPaths()) {
-                return $path;
-            }
-
-            return $this->absolutePathWithinRoots($path, $roots) ?? '';
-        }
-
-        $resolved = $this->hasConfiguredViewPaths()
-            ? $this->firstExistingSafeTemplatePath($roots, [$path])
-            : $this->firstExistingTemplatePath($roots, [$path]);
-        if ($resolved !== null) {
-            return $resolved;
-        }
-
-        if (! $this->hasConfiguredViewPaths()) {
-            return $this->joinPath($roots[0], $path);
-        }
-
-        return $this->resolvePathWithinRoot($roots[0], $path) ?? '';
+        return $this->templateLocator->resolveTemplatePath($path);
     }
 
     public function resolveTemplateTagPath(string $path): string
     {
-        if ($path === '') {
-            return $path;
-        }
-
-        if ($this->isAbsolutePath($path)) {
-            return '';
-        }
-
-        $roots    = $this->templateSearchRoots();
-        $resolved = $this->firstExistingSafeTemplatePath($roots, [$path]);
-        if ($resolved !== null) {
-            return $resolved;
-        }
-
-        return $this->resolvePathWithinRoot($roots[0], $path) ?? '';
+        return $this->templateLocator->resolveTemplateTagPath($path);
     }
 
     /**
@@ -752,47 +575,16 @@ final class NodeProcessor
         return $this->paths->has($path, $scope);
     }
 
-    private function resolveViewPath(string $name): string
-    {
-        $name = trim($name);
-        if ($name === '') {
-            return $name;
-        }
-
-        $candidates = [$name];
-
-        $basename = basename($name);
-        if (! str_contains($basename, '.')) {
-            $candidates[] = $name . '.antlers.html';
-        }
-
-        $viewRoots = array_values($this->viewPaths);
-
-        $resolved = $this->firstExistingSafeTemplatePath($viewRoots, $candidates);
-        if ($resolved !== null) {
-            return $resolved;
-        }
-
-        if ($viewRoots !== []) {
-            return $this->resolvePathWithinRoot($viewRoots[0], $candidates[0]) ?? '';
-        }
-
-        return $this->resolveTemplatePath($candidates[0]);
-    }
-
     /**
      * @param array<string, mixed> $scope
      * @param AbstractNode[] $children
      */
-    private function renderChildrenWithScope(array $scope, array $children): string
+    private function renderChildrenWithScope(array $scope, array $children, RenderContext $context): string
     {
-        $this->scope->push($scope);
-
-        try {
-            return $this->processNodes($children);
-        } finally {
-            $this->scope->pop();
-        }
+        return $context->renderFrame(
+            $scope,
+            fn(): string => $this->processNodes($children, $context),
+        );
     }
 
     /**
@@ -800,6 +592,41 @@ final class NodeProcessor
      *
      * @param AbstractNode[] $children
      */
+    /** @return array{path: string, maxDepth: int}|null */
+    private function recursiveDirective(string $raw): ?array
+    {
+        if (preg_match('/^\*recursive\s+([^\s*]+)(.*?)\*(.*)$/s', trim($raw), $matches) !== 1) {
+            return null;
+        }
+
+        $options  = trim($matches[2] . ' ' . $matches[3]);
+        $maxDepth = PHP_INT_MAX;
+        if (preg_match('/max_depth\s*=\s*["\']?(\d+)/', $options, $depth) === 1) {
+            $maxDepth = max(0, (int) $depth[1]);
+        }
+
+        return ['path' => $matches[1], 'maxDepth' => $maxDepth];
+    }
+
+    private function processRecursive(string $path, int $maxDepth, RenderContext $context): string
+    {
+        $frame = $context->scope->current();
+        $root  = substr($path, 0, strcspn($path, '.:['));
+
+        return $context->recursion->descend(
+            $maxDepth,
+            fn(array $children): string => $context->renderFrame(
+                [$root => null],
+                fn(): string => $this->renderPairedValue(
+                    $this->resolvePathResult($path, $frame)->value,
+                    $children,
+                    $context,
+                ),
+            ),
+        );
+    }
+
+    /** @param AbstractNode[] $children */
     private function childrenAsRaw(array $children): string
     {
         $output = '';
@@ -815,65 +642,44 @@ final class NodeProcessor
     }
 
     /**
-     * @param array<array-key, mixed> $data
-     * @return array<string, mixed>
+     * @param array<string, mixed> $scope
      */
-    private function normalizeScopeFrame(array $data): array
-    {
-        return ValueCoercion::stringKeys($data);
-    }
-
-    /**
-     * @return array<array-key, mixed>|null
-     */
-    private function iterableToArray(mixed $value): ?array
-    {
-        return ValueCoercion::toArray($value);
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function extractItemScope(mixed $item): ?array
-    {
-        return ValueCoercion::toScopeFrame($item);
-    }
-
-    private function toInt(mixed $value): int
-    {
-        return ValueCoercion::toInt($value);
+    private function stringifyEvaluatedNode(
+        AbstractNode $node,
+        array $scope,
+        RenderContext $context,
+    ): string {
+        return $this->evaluator->stringify($this->evaluateNodeValue($node, $scope, $context));
     }
 
     /**
      * @param array<string, mixed> $scope
      */
-    private function stringifyEvaluatedNode(AbstractNode $node, array $scope): string
-    {
-        return $this->evaluator->stringify($this->evaluateNodeValue($node, $scope));
+    private function evaluateNodeValue(
+        AbstractNode $node,
+        array $scope,
+        RenderContext $context,
+    ): mixed {
+        return $this->evaluator->evaluate($node, $scope, $this->assignmentWriter($context));
     }
 
     /**
      * @param array<string, mixed> $scope
      */
-    private function evaluateNodeValue(AbstractNode $node, array $scope): mixed
-    {
-        return $this->evaluator->evaluate($node, $scope, $this->assignmentWriter());
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function evaluateNodeResult(AbstractNode $node, array $scope): ValueResult
-    {
-        return $this->evaluator->evaluateResult($node, $scope, $this->assignmentWriter());
+    private function evaluateNodeResult(
+        AbstractNode $node,
+        array $scope,
+        RenderContext $context,
+    ): ValueResult {
+        return $this->evaluator->evaluateResult($node, $scope, $this->assignmentWriter($context));
     }
 
     /**
      * @return callable(string, mixed): void
      */
-    private function assignmentWriter(): callable
+    private function assignmentWriter(RenderContext $context): callable
     {
-        return $this->scope->write(...);
+        return $context->scope->write(...);
     }
 
     /**
@@ -884,85 +690,15 @@ final class NodeProcessor
         return new ValueResult($this->resolvePathValue($path, $scope));
     }
 
-    /**
-     * @param array<string, mixed> $params
-     * @param array<string, mixed> $scope
-     */
-    private function handleTagResult(TagNode $node, array $params, array $scope): ValueResult
-    {
-        $this->pushTagContext($node);
-
-        try {
-            return new ValueResult(
-                $this->tags->handle($node->name, $node->method, $params, $scope, $this, $node->children),
-            );
-        } finally {
-            $this->popTagContext();
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $loopVars
-     * @return array<string, mixed>
-     */
-    private function withLoopValue(array $loopVars, string $key, mixed $value): array
-    {
-        return array_merge($loopVars, [$key => $value]);
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array{name: string, children: array<AbstractNode>}|null
-     */
-    private function resolveSlotDefinition(AbstractNode $node, array $scope): ?array
-    {
-        if ($node instanceof TagNode) {
-            $parsed = $node;
-        } elseif ($node instanceof AntlersNode && ! $node->isClosingTag) {
-            $parsed = $this->parser->parseNode($node);
-        } else {
-            return null;
-        }
-
-        if (! $parsed instanceof TagNode || $parsed->name !== 'slot' || $parsed->children === []) {
-            return null;
-        }
-
-        $name = $this->slotName($parsed, $scope);
-
-        return [
-            'name'     => $name ?? 'default',
-            'children' => $parsed->children,
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function slotName(TagNode $node, array $scope): ?string
-    {
-        if ($node->method !== 'index' && $node->method !== '') {
-            return $node->method;
-        }
-
-        if (! isset($node->parameters['name'])) {
-            return null;
-        }
-
-        $name = $this->evaluator->stringify($this->evaluateNodeValue($node->parameters['name'], $scope));
-
-        return $name !== '' ? $name : null;
-    }
-
     private function resolveOnceKey(?string $key): string
     {
         if ($key !== null && $key !== '') {
             return 'named:' . $key;
         }
 
-        $context = $this->currentTagContext();
+        $context = $this->tagInvoker->currentContext();
         if ($context === null) {
-            return 'anonymous:' . $this->state->onceCount();
+            return 'anonymous:' . $this->context()->state->onceCount();
         }
 
         return implode(':', [
@@ -977,204 +713,12 @@ final class NodeProcessor
 
     private function currentTemplateIdentifier(): string
     {
-        if ($this->templatePathStack === []) {
-            return '__inline__';
-        }
-
-        return $this->templatePathStack[count($this->templatePathStack) - 1];
+        return $this->templateLocator->currentTemplateIdentifier();
     }
 
-    private function pushTagContext(TagNode $node): void
+
+    private function context(): RenderContext
     {
-        $this->tagContextStack[] = [
-            'name'      => $node->name,
-            'method'    => $node->method,
-            'line'      => $node->line,
-            'signature' => hash('sha256', serialize([
-                $node->parameters,
-                $node->children,
-            ])),
-        ];
-    }
-
-    private function popTagContext(): void
-    {
-        array_pop($this->tagContextStack);
-    }
-
-    /**
-     * @return array{name: string, method: string, line: int, signature: string}|null
-     */
-    private function currentTagContext(): ?array
-    {
-        $key = array_key_last($this->tagContextStack);
-
-        return $key === null ? null : $this->tagContextStack[$key];
-    }
-
-    /**
-     * @return non-empty-list<string>
-     */
-    private function templateSearchRoots(): array
-    {
-        $roots = [];
-
-        if ($this->templatePathStack !== []) {
-            $roots[] = $this->templatePathStack[count($this->templatePathStack) - 1];
-        }
-
-        foreach ($this->viewPaths as $templateRoot) {
-            $roots[] = $templateRoot;
-        }
-
-        if ($roots === []) {
-            $roots[] = (string) getcwd();
-        }
-
-        return array_values(array_unique($roots));
-    }
-
-    /**
-     * @param list<string> $roots
-     * @param list<string> $candidates
-     */
-    private function firstExistingTemplatePath(array $roots, array $candidates): ?string
-    {
-        foreach ($roots as $root) {
-            foreach ($candidates as $candidate) {
-                $resolved = $this->joinPath($root, $candidate);
-                if (is_file($resolved)) {
-                    return $resolved;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param list<string> $roots
-     * @param list<string> $candidates
-     */
-    private function firstExistingSafeTemplatePath(array $roots, array $candidates): ?string
-    {
-        foreach ($roots as $root) {
-            foreach ($candidates as $candidate) {
-                $resolved = $this->resolvePathWithinRoot($root, $candidate);
-                if ($resolved === null) {
-                    continue;
-                }
-
-                if (is_file($resolved)) {
-                    return $resolved;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param list<string> $roots
-     */
-    private function absolutePathWithinRoots(string $path, array $roots): ?string
-    {
-        $normalized = $this->normalizePath($path);
-        if ($normalized === null) {
-            return null;
-        }
-
-        foreach ($roots as $root) {
-            if ($this->isPathWithinRoot($normalized, $root)) {
-                return $normalized;
-            }
-        }
-
-        return null;
-    }
-
-    private function hasConfiguredViewPaths(): bool
-    {
-        return $this->viewPaths !== [];
-    }
-
-    private function joinPath(string $root, string $path): string
-    {
-        return rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
-    }
-
-    private function resolvePathWithinRoot(string $root, string $path): ?string
-    {
-        $root = rtrim($root, DIRECTORY_SEPARATOR);
-        $rootReal = realpath($root);
-        if ($rootReal === false) {
-            return null;
-        }
-
-        $candidate  = $rootReal . DIRECTORY_SEPARATOR . ltrim($path, DIRECTORY_SEPARATOR);
-        $normalized = $this->normalizePath($candidate);
-        if ($normalized === null) {
-            return null;
-        }
-
-        return $this->isPathWithinRoot($normalized, $rootReal) ? $normalized : null;
-    }
-
-    private function isPathWithinRoot(string $path, string $root): bool
-    {
-        $rootReal = realpath(rtrim($root, DIRECTORY_SEPARATOR));
-        if ($rootReal === false) {
-            return false;
-        }
-
-        $rootPrefix = $rootReal . DIRECTORY_SEPARATOR;
-
-        return $path === $rootReal || str_starts_with($path, $rootPrefix);
-    }
-
-    private function isAbsolutePath(string $path): bool
-    {
-        return $path !== '' && ($path[0] === '/' || preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1);
-    }
-
-    private function normalizePath(string $path): ?string
-    {
-        $path   = str_replace('\\', '/', $path);
-
-        if (preg_match('/^[A-Za-z]:/', $path) === 1) {
-            $prefix = substr($path, 0, 2);
-            $path   = substr($path, 2);
-        } else {
-            $prefix = '';
-        }
-
-        $segments = explode('/', ltrim($path, '/'));
-        $resolved = [];
-
-        foreach ($segments as $segment) {
-            if ($segment === '') {
-                continue;
-            }
-
-            if ($segment === '.') {
-                continue;
-            }
-
-            if ($segment === '..') {
-                if ($resolved === []) {
-                    return null;
-                }
-
-                array_pop($resolved);
-
-                continue;
-            }
-
-            $resolved[] = $segment;
-        }
-
-        $normalized = $prefix . '/' . implode('/', $resolved);
-
-        return str_replace('/', DIRECTORY_SEPARATOR, $normalized);
+        return $this->context ?? $this->standaloneContext;
     }
 }

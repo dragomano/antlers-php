@@ -19,14 +19,10 @@ final class Scope
     /** @var array<string, mixed>|null */
     private ?array $flattened = null;
 
-    /**
-     * @param array<string, mixed> $globals
-     */
+    /** @param array<string, mixed> $globals */
     public function __construct(private readonly array $globals = []) {}
 
-    /**
-     * @param array<string, mixed> $frame
-     */
+    /** @param array<string, mixed> $frame */
     public function push(array $frame): void
     {
         $this->frames[]  = $frame;
@@ -49,12 +45,19 @@ final class Scope
         $index = count($this->frames) - 1;
 
         $this->frames[$index][$name] = $value;
-        $this->flattened             = null;
+
+        $this->flattened = null;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
+    public function current(): array
+    {
+        $key = array_key_last($this->frames);
+
+        return $key === null ? $this->globals : $this->frames[$key];
+    }
+
+    /** @return array<string, mixed> */
     public function all(): array
     {
         return $this->flattened ??= array_merge($this->globals, ...$this->frames);

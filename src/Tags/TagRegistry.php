@@ -40,10 +40,9 @@ final class TagRegistry
             ?? throw new AntlersRuntimeException(sprintf('Unknown tag: "%s"', $name));
 
         if ($handler instanceof TagInterface) {
-            return $handler->handle($parameters, $data, $processor, $method, $children);
+            return $handler->handle(new TagContext($name, $method, $parameters, $data, $children, $processor));
         }
 
-        // Callable: (params, data, processor, method, children) → string|null
         return ($handler)($parameters, $data, $processor, $method, $children);
     }
 }

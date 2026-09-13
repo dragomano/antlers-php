@@ -49,7 +49,9 @@ final class Engine
         $this->runtimeOptions = new RuntimeOptions();
 
         // Register built-in modifiers
-        CoreModifiers::register($this->modifierRegistry, $this->runtimeOptions);
+        $this->modifierRegistry->setLoader(function (): void {
+            CoreModifiers::register($this->modifierRegistry, $this->runtimeOptions);
+        });
         CoreTags::register($this->tagRegistry);
 
         // Build the runtime pipeline

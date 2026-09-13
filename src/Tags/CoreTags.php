@@ -9,28 +9,45 @@ use Bugo\Antlers\Nodes\LiteralNode;
 use Bugo\Antlers\Runtime\NodeProcessor;
 use Bugo\Antlers\Runtime\ValueCoercion;
 use Bugo\Antlers\Runtime\ValueResult;
+use LogicException;
 
 final class CoreTags
 {
     public static function register(TagRegistry $registry): void
     {
-        $registry->register('foreach', self::foreachTag(...));
-        $registry->register('partial', self::partialTag(...));
-        $registry->register('layout', self::layoutTag(...));
-        $registry->register('section', self::sectionTag(...));
-        $registry->register('yield', self::yieldTag(...));
-        $registry->register('slot', self::slotTag(...));
-        $registry->register('stack', self::stackTag(...));
-        $registry->register('push', self::pushTag(...));
-        $registry->register('prepend', self::prependTag(...));
-        $registry->register('once', self::onceTag(...));
-        $registry->register('markdown', self::markdownTag(...));
-        $registry->register('loop', self::loopTag(...));
-        $registry->register('switch', self::switchTag(...));
-        $registry->register('scope', self::scopeTag(...));
-        $registry->register('dump', self::dumpTag(...));
-        $registry->register('svg', self::svgTag(...));
-        $registry->register('increment', self::incrementTag(...));
+        IterationTags::register($registry);
+        CompositionTags::register($registry);
+        ContentTags::register($registry);
+        ScopeTags::register($registry);
+    }
+
+    /** @param list<string> $names */
+    public static function registerNames(TagRegistry $registry, array $names): void
+    {
+        foreach ($names as $name) {
+            $handler = match ($name) {
+                'foreach'   => self::foreachTag(...),
+                'partial'   => self::partialTag(...),
+                'layout'    => self::layoutTag(...),
+                'section'   => self::sectionTag(...),
+                'yield'     => self::yieldTag(...),
+                'slot'      => self::slotTag(...),
+                'stack'     => self::stackTag(...),
+                'push'      => self::pushTag(...),
+                'prepend'   => self::prependTag(...),
+                'once'      => self::onceTag(...),
+                'markdown'  => self::markdownTag(...),
+                'loop'      => self::loopTag(...),
+                'switch'    => self::switchTag(...),
+                'scope'     => self::scopeTag(...),
+                'dump'      => self::dumpTag(...),
+                'svg'       => self::svgTag(...),
+                'increment' => self::incrementTag(...),
+                default     => throw new LogicException(sprintf('Unknown core tag: "%s"', $name)),
+            };
+
+            $registry->register($name, $handler);
+        }
     }
 
     /**

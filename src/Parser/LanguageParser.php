@@ -84,6 +84,10 @@ final class LanguageParser
 
         $this->baseLine = $node->line;
 
+        if (str_starts_with(trim($raw), '*recursive')) {
+            return $node;
+        }
+
         // Closing tags don't need parsing
         if ($node->isClosingTag) {
             return $node;
