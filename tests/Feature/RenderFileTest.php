@@ -6,12 +6,12 @@ use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 
 function renderFileFixture(string $name): string
 {
-    return dirname(__DIR__) . '/Fixtures/RenderFile/' . $name;
+    return __DIR__ . '/../Fixtures/RenderFile/' . $name;
 }
 
 function renderViewFixture(string $name): string
 {
-    return dirname(__DIR__) . '/Fixtures/RenderView/' . $name;
+    return __DIR__ . '/../Fixtures/RenderView/' . $name;
 }
 
 it('renders a file with data', function (): void {
@@ -53,7 +53,7 @@ it('blocks renderFile outside configured template roots', function (): void {
     $e = engine();
     $e->setViewPaths(renderFileFixture(''));
 
-    expect(fn(): string => $e->renderFile(dirname(__DIR__) . '/Fixtures/CoreTags/outside.antlers.html'))
+    expect(fn(): string => $e->renderFile(__DIR__ . '/../Fixtures/CoreTags/outside.antlers.html'))
         ->toThrow(AntlersRuntimeException::class, 'outside the configured template roots');
 });
 

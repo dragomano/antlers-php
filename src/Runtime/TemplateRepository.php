@@ -10,6 +10,8 @@ use Bugo\Antlers\Parser\DocumentParser;
 
 final class TemplateRepository
 {
+    private const MAX_RENDER_DEPTH = 64;
+
     /** @var string[] */
     private array $renderStack = [];
 
@@ -42,8 +44,14 @@ final class TemplateRepository
             throw new AntlersRuntimeException('Template file not found: ' . $resolved);
         }
 
-        if (in_array($resolved, $this->renderStack, true)) {
-            throw new AntlersRuntimeException('Recursive template rendering detected: ' . $resolved);
+        if (count($this->renderStack) >= self::MAX_RENDER_DEPTH) {
+            $chain = array_map(basename(...), [...$this->renderStack, $resolved]);
+
+            throw new AntlersRuntimeException(sprintf(
+                'Recursive template rendering detected: Template rendering depth limit of %d exceeded: %s',
+                self::MAX_RENDER_DEPTH,
+                implode(' -> ', $chain),
+            ));
         }
 
         $this->renderStack[] = $resolved;
@@ -76,7 +84,7 @@ final class TemplateRepository
     {
         clearstatcache(true, $path);
 
-        $fingerprint = (string) filemtime($path) . ':' . (string) filesize($path);
+        $fingerprint = sprintf('%s:%s', (string) filemtime($path), (string) filesize($path));
         $cached      = $this->cache[$path] ?? null;
 
         if ($cached !== null && $cached['fingerprint'] === $fingerprint) {

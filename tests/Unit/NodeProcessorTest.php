@@ -94,12 +94,12 @@ function nodeProcessorWithTag(string $name, callable $handler): NodeProcessor
 
 function renderFileFixturePath(string $name): string
 {
-    return dirname(__DIR__) . '/Fixtures/RenderFile/' . $name;
+    return __DIR__ . '/../Fixtures/RenderFile/' . $name;
 }
 
 function renderViewFixturePath(string $name): string
 {
-    return dirname(__DIR__) . '/Fixtures/RenderView/' . $name;
+    return __DIR__ . '/../Fixtures/RenderView/' . $name;
 }
 
 function normalizePathSeparators(string $path): string
@@ -212,7 +212,7 @@ it('resolves template and tag paths across view roots and malformed inputs', fun
     expect($processor->resolveTemplatePath(''))->toBe('')
         ->and($processor->resolveTemplatePath('pages/home.antlers.html'))->toBe(realpath($viewRoot . '/pages/home.antlers.html'))
         ->and($processor->resolveTemplatePath('pages/missing.antlers.html'))
-        ->toBe(normalizePathSeparators($viewRoot . '/pages/missing.antlers.html'))
+        ->toBe(normalizePathSeparators(realpath($viewRoot) . '/pages/missing.antlers.html'))
         ->and($processor->resolveTemplatePath('/../../etc/passwd'))->toBe('')
         ->and($processor->resolveTemplatePath($viewRoot . '/./pages//home.antlers.html'))->toBe(realpath($viewRoot . '/pages/home.antlers.html'))
         ->and($processor->resolveTemplateTagPath(''))->toBe('')

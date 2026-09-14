@@ -6,7 +6,7 @@ use Bugo\Antlers\Exceptions\AntlersRuntimeException;
 
 function fixturePath(string $relative): string
 {
-    return dirname(__DIR__) . '/Fixtures/CoreTags/' . $relative;
+    return __DIR__ . '/../Fixtures/CoreTags/' . $relative;
 }
 
 it('supports statamic foreach shorthand with key and value', function (): void {
