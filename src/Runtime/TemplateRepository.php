@@ -13,6 +13,9 @@ final class TemplateRepository
     /** @var string[] */
     private array $renderStack = [];
 
+    /** @var array<string, array{fingerprint: string, nodes: AbstractNode[]}> */
+    private array $cache = [];
+
     public function __construct(
         private readonly DocumentParser $parser,
         private readonly TemplateLocator $locator,
@@ -47,9 +50,7 @@ final class TemplateRepository
         $this->locator->pushTemplate($resolved);
 
         try {
-            $template = (string) file_get_contents($resolved);
-
-            return $renderer($this->parse($template), $data);
+            return $renderer($this->parseFile($resolved), $data);
         } finally {
             $this->locator->popTemplate();
             array_pop($this->renderStack);
@@ -68,5 +69,27 @@ final class TemplateRepository
         }
 
         return $this->renderFile($resolved, $data, $renderer);
+    }
+
+    /** @return AbstractNode[] */
+    private function parseFile(string $path): array
+    {
+        clearstatcache(true, $path);
+
+        $fingerprint = (string) filemtime($path) . ':' . (string) filesize($path);
+        $cached      = $this->cache[$path] ?? null;
+
+        if ($cached !== null && $cached['fingerprint'] === $fingerprint) {
+            return $cached['nodes'];
+        }
+
+        $nodes = $this->parse((string) file_get_contents($path));
+
+        $this->cache[$path] = [
+            'fingerprint' => $fingerprint,
+            'nodes'       => $nodes,
+        ];
+
+        return $nodes;
     }
 }
