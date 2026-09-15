@@ -71,10 +71,20 @@ it('supports groupby as a standalone collection operator', function (): void {
             ['name' => 'Bob', 'role' => 'editor'],
             ['name' => 'Cara', 'role' => 'admin'],
         ],
-    ]))->toBe('[{"role":"admin","key":"admin","values":[{"name":"Alice","role":"admin"},{"name":"Cara","role":"admin"}]},{"role":"editor","key":"editor","values":[{"name":"Bob","role":"editor"}]}]');
+    ]))->toBe('[{"role":"admin","key":"admin","group":"admin","items":[{"name":"Alice","role":"admin"},{"name":"Cara","role":"admin"}]},{"role":"editor","key":"editor","group":"editor","items":[{"name":"Bob","role":"editor"}]}]');
 });
 
-it('supports official groupby aliases and custom values alias', function (): void {
+it('streams grouped frames through the group and items fields', function (): void {
+    expect(engine()->render('{{ res = items groupby (role) }}{{ res }}{{ group }}:{{ items }}{{ name }},{{ /items }};{{ /res }}', [
+        'items' => [
+            ['name' => 'Alice', 'role' => 'admin'],
+            ['name' => 'Bob', 'role' => 'editor'],
+            ['name' => 'Cara', 'role' => 'admin'],
+        ],
+    ]))->toBe('admin:Alice,Cara,;editor:Bob,;');
+});
+
+it('supports official groupby aliases and a custom items alias', function (): void {
     expect(engineWithCollectionJson()->render(
         "{{ players groupby (team 'club', position) as 'entries' | to_json }}",
         [
@@ -85,7 +95,13 @@ it('supports official groupby aliases and custom values alias', function (): voi
                 ['team' => 'Pistons', 'position' => 'Guard', 'name' => 'Thomas'],
             ],
         ],
-    ))->toBe('[{"club":"Bulls","position":"Guard","key":{"club":"Bulls","position":"Guard"},"entries":[{"team":"Bulls","position":"Guard","name":"Jordan"}],"values":[{"team":"Bulls","position":"Guard","name":"Jordan"}]},{"club":"Bulls","position":"Forward","key":{"club":"Bulls","position":"Forward"},"entries":[{"team":"Bulls","position":"Forward","name":"Pippen"},{"team":"Bulls","position":"Forward","name":"Rodman"}],"values":[{"team":"Bulls","position":"Forward","name":"Pippen"},{"team":"Bulls","position":"Forward","name":"Rodman"}]},{"club":"Pistons","position":"Guard","key":{"club":"Pistons","position":"Guard"},"entries":[{"team":"Pistons","position":"Guard","name":"Thomas"}],"values":[{"team":"Pistons","position":"Guard","name":"Thomas"}]}]');
+    ))->toBe('[{"club":"Bulls","position":"Guard","key":{"club":"Bulls","position":"Guard"},"group":{"club":"Bulls","position":"Guard"},"entries":[{"team":"Bulls","position":"Guard","name":"Jordan"}],"items":[{"team":"Bulls","position":"Guard","name":"Jordan"}]},{"club":"Bulls","position":"Forward","key":{"club":"Bulls","position":"Forward"},"group":{"club":"Bulls","position":"Forward"},"entries":[{"team":"Bulls","position":"Forward","name":"Pippen"},{"team":"Bulls","position":"Forward","name":"Rodman"}],"items":[{"team":"Bulls","position":"Forward","name":"Pippen"},{"team":"Bulls","position":"Forward","name":"Rodman"}]},{"club":"Pistons","position":"Guard","key":{"club":"Pistons","position":"Guard"},"group":{"club":"Pistons","position":"Guard"},"entries":[{"team":"Pistons","position":"Guard","name":"Thomas"}],"items":[{"team":"Pistons","position":"Guard","name":"Thomas"}]}]')
+        ->and(engineWithCollectionJson()->render("{{ players groupby (team 'club') | to_json }}", [
+            'players' => [
+                ['team' => 'Bulls', 'position' => 'Guard', 'name' => 'Jordan'],
+                ['team' => 'Pistons', 'position' => 'Guard', 'name' => 'Thomas'],
+            ],
+        ]))->toBe('[{"club":"Bulls","key":"Bulls","group":"Bulls","items":[{"team":"Bulls","position":"Guard","name":"Jordan"}]},{"club":"Pistons","key":"Pistons","group":"Pistons","items":[{"team":"Pistons","position":"Guard","name":"Thomas"}]}]');
 });
 
 it('evaluates arithmetic before standalone collection operators', function (): void {

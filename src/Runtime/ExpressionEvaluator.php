@@ -577,24 +577,24 @@ final class ExpressionEvaluator
             return $value;
         }
 
-        /** @var array<string, array{key: mixed, fields: array<string, mixed>, values: list<mixed>}> $groups */
+        /** @var array<string, array{key: mixed, fields: array<string, mixed>, items: list<mixed>}> $groups */
         $groups = [];
 
         array_walk($items, function (mixed $item) use (&$groups, $operator, $scope, $assignmentWriter): void {
             $groups = $this->reduceGroupedItems($groups, $item, $operator, $scope, $assignmentWriter);
         });
 
-        $valuesAlias = $operator->valuesAlias ?? 'values';
+        $itemsAlias = $operator->valuesAlias ?? 'items';
 
-        return array_values(array_map(function (array $group) use ($valuesAlias): array {
+        return array_values(array_map(function (array $group) use ($itemsAlias): array {
             /** @var array<string, mixed> $base */
             $base = $group['fields'];
-            $base = array_merge($base, ['key' => $group['key']]);
+            $base = array_merge($base, ['key' => $group['key'], 'group' => $group['key']]);
 
-            $base[$valuesAlias] = $group['values'];
+            $base[$itemsAlias] = $group['items'];
 
-            if ($valuesAlias !== 'values') {
-                $base['values'] = $group['values'];
+            if ($itemsAlias !== 'items') {
+                $base['items'] = $group['items'];
             }
 
             return $base;
@@ -705,25 +705,25 @@ final class ExpressionEvaluator
 
     /**
      * @param array<string, mixed> $groupKey
-     * @param array{key: mixed, fields: array<string, mixed>, values: list<mixed>}|null $group
-     * @return array{key: mixed, fields: array<string, mixed>, values: list<mixed>}
+     * @param array{key: mixed, fields: array<string, mixed>, items: list<mixed>}|null $group
+     * @return array{key: mixed, fields: array<string, mixed>, items: list<mixed>}
      */
     private function appendGroupedItem(?array $group, array $groupKey, mixed $item): array
     {
         $group ??= [
             'key'    => count($groupKey) === 1 ? reset($groupKey) : $groupKey,
             'fields' => $groupKey,
-            'values' => [],
+            'items'  => [],
         ];
 
-        $group['values'] = array_merge($group['values'], [$item]);
+        $group['items'] = array_merge($group['items'], [$item]);
 
         return $group;
     }
 
     /**
-     * @param array<string, array{key: mixed, fields: array<string, mixed>, values: list<mixed>}> $groups
-     * @return array{key: mixed, fields: array<string, mixed>, values: list<mixed>}|null
+     * @param array<string, array{key: mixed, fields: array<string, mixed>, items: list<mixed>}> $groups
+     * @return array{key: mixed, fields: array<string, mixed>, items: list<mixed>}|null
      */
     private function existingGroupedItem(array $groups, string $serialized): ?array
     {
@@ -731,9 +731,9 @@ final class ExpressionEvaluator
     }
 
     /**
-     * @param array<string, array{key: mixed, fields: array<string, mixed>, values: list<mixed>}> $groups
+     * @param array<string, array{key: mixed, fields: array<string, mixed>, items: list<mixed>}> $groups
      * @param array<string, mixed> $scope
-     * @return array<string, array{key: mixed, fields: array<string, mixed>, values: list<mixed>}>
+     * @return array<string, array{key: mixed, fields: array<string, mixed>, items: list<mixed>}>
      */
     private function reduceGroupedItems(
         array $groups,

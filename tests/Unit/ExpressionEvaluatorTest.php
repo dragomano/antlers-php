@@ -354,11 +354,11 @@ describe('ExpressionEvaluator', function (): void {
                 ['role' => 'admin'],
                 ['role' => 'editor'],
             ]]))->toBe([
-                ['role' => 'admin', 'key' => 'admin', 'values' => [['role' => 'admin']]],
-                ['role' => 'editor', 'key' => 'editor', 'values' => [['role' => 'editor']]],
+                ['role' => 'admin', 'key' => 'admin', 'group' => 'admin', 'items' => [['role' => 'admin']]],
+                ['role' => 'editor', 'key' => 'editor', 'group' => 'editor', 'items' => [['role' => 'editor']]],
             ])
             ->and($evaluator->evaluate($groupInvalid, ['items' => [1]]))->toBe([
-                ['key' => [], 'values' => [1]],
+                ['key' => [], 'group' => [], 'items' => [1]],
             ]);
     });
 

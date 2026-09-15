@@ -186,6 +186,29 @@ Paired array loops also support neighbor access via colon notation:
 {{ /songs }}
 ```
 
+### Grouping Collections
+
+`groupby` turns a collection into a list of group frames, one per distinct value of the grouped
+fields:
+
+- `key` — the group value; an array when several fields are grouped at once;
+- `group` — the display label, which is the key here: this engine has no separate label source;
+- `items` — the members of the group.
+
+Each grouped field is copied into the frame under its own name, or under the alias in parentheses,
+so `groupby (team 'club')` adds `club`; `as '…'` renames the members and keeps `items` beside them.
+
+```antlers
+{{ res = items groupby (role) }}{{ res }}{{ group }}:{{ items }}{{ name }},{{ /items }};{{ /res }}
+{{# → admin:Alice,Cara,;editor:Bob,; #}}
+
+{{ res = items groupby (role) }}{{ res }}{{ key }}/{{ group }};{{ /res }}
+{{# → 0/admin;1/editor; #}}
+```
+
+Read the group value through `{{ group }}`: `{{ key }}` inside that loop is the loop's own key,
+because loop metadata wins over an item field.
+
 ### Modifiers
 
 ```antlers
