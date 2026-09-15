@@ -40,18 +40,13 @@ final readonly class LoopRenderer
         ): void {
             $index++;
 
-            $loopVars = [
-                'count' => $index,
-                'index' => $index - 1,
-                'total' => $total,
-                'first' => $index === 1,
-                'last'  => $index === $total,
-                'odd'   => $index % 2 !== 0,
-                'even'  => $index % 2 === 0,
-                'key'   => $key,
-                'prev'  => $this->normalizeRelativeItem($index > 1 ? ($itemValues[$index - 2] ?? null) : null),
-                'next'  => $this->normalizeRelativeItem($index < $total ? ($itemValues[$index] ?? null) : null),
-            ];
+            $loopVars = $this->loopVariables(
+                $index,
+                $total,
+                $key,
+                $index > 1 ? ($itemValues[$index - 2] ?? null) : null,
+                $index < $total ? ($itemValues[$index] ?? null) : null,
+            );
 
             $itemScope = ValueCoercion::toScopeFrame($item);
             $loopVars  = $itemScope !== null
@@ -83,19 +78,37 @@ final readonly class LoopRenderer
         for ($i = $from; $step > 0 ? $i <= $to : $i >= $to; $i += $step) {
             $index++;
 
-            $output .= ($this->renderChildren)([
-                'count' => $index,
-                'index' => $index - 1,
-                'total' => $total,
-                'first' => $index === 1,
-                'last'  => $index === $total,
-                'odd'   => $index % 2 !== 0,
-                'even'  => $index % 2 === 0,
-                'value' => $i,
-            ], $children);
+            $loopVars = $this->loopVariables(
+                $index,
+                $total,
+                $index - 1,
+                $index > 1 ? $i - $step : null,
+                $index < $total ? $i + $step : null,
+            );
+
+            $output .= ($this->renderChildren)(array_merge($loopVars, ['value' => $i]), $children);
         }
 
         return $output;
+    }
+
+    /** @return array<string, mixed> */
+    private function loopVariables(int $position, int $total, int|string $key, mixed $prev, mixed $next): array
+    {
+        return [
+            'count'         => $position,
+            'index'         => $position - 1,
+            'total'         => $total,
+            'total_results' => $total,
+            'no_results'    => false,
+            'first'         => $position === 1,
+            'last'          => $position === $total,
+            'odd'           => $position % 2 !== 0,
+            'even'          => $position % 2 === 0,
+            'key'           => $key,
+            'prev'          => $this->normalizeRelativeItem($prev),
+            'next'          => $this->normalizeRelativeItem($next),
+        ];
     }
 
     /** @return array<array-key, mixed>|null */

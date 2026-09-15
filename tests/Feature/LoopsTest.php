@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+function loopMetadataBody(): string
+{
+    return '{{ count }}/{{ index }}/{{ total }}/{{ total_results }}/{{ no_results ? "T" : "N" }}'
+        . '/{{ first ? "F" : "-" }}/{{ last ? "L" : "-" }}/{{ odd ? "o" : "e" }}/{{ key }};';
+}
+
 it('iterates array with foreach', function (): void {
     $tpl  = '{{ foreach items as item }}{{ item }}|{{ /foreach }}';
     $data = ['items' => ['a', 'b', 'c']];
@@ -180,4 +186,49 @@ it('renders a single frame when the keys are strings', function (
 })->with([
     'associative' => [['name' => 'Alice'], 'Alice'],
     'mixed keys'  => [[0 => 'ignored', 'name' => 'Alice'], 'Alice'],
+]);
+
+it('exposes the same loop metadata in foreach, for and paired blocks', function (string $template): void {
+    expect(engine()->render($template, ['items' => ['x', 'y']]))
+        ->toBe('1/0/2/2/N/F/-/o/0;2/1/2/2/N/-/L/e/1;');
+})->with([
+    'foreach' => '{{ foreach items as item }}' . loopMetadataBody() . '{{ /foreach }}',
+    'for'     => '{{ for 1 to 2 }}' . loopMetadataBody() . '{{ /for }}',
+    'paired'  => '{{ items }}' . loopMetadataBody() . '{{ /items }}',
+]);
+
+it('provides key, prev and next in for loops', function (string $template, string $expected): void {
+    expect(engine()->render($template))->toBe($expected);
+})->with([
+    'ascending'  => [
+        '{{ for 1 to 3 }}{{ key }}:{{ value }}({{ prev.value }}<{{ next.value }})|{{ /for }}',
+        '0:1(<2)|1:2(1<3)|2:3(2<)|',
+    ],
+    'descending' => [
+        '{{ for 3 to 1 }}{{ key }}:{{ value }}({{ prev.value }}<{{ next.value }})|{{ /for }}',
+        '0:3(<2)|1:2(3<1)|2:1(2<)|',
+    ],
+]);
+
+it('keeps total as an alias of total_results', function (string $template): void {
+    expect(engine()->render($template, ['items' => ['a', 'b']]))->toBe('2=2;2=2;');
+})->with([
+    'foreach' => '{{ foreach items as item }}{{ total }}={{ total_results }};{{ /foreach }}',
+    'for'     => '{{ for 1 to 2 }}{{ total }}={{ total_results }};{{ /for }}',
+    'paired'  => '{{ items }}{{ total }}={{ total_results }};{{ /items }}',
+]);
+
+it('reports no_results as false for every loop iteration', function (string $template): void {
+    expect(engine()->render($template, ['items' => ['a', 'b']]))->toBe('NN');
+})->with([
+    'foreach' => '{{ foreach items as item }}{{ no_results ? "Y" : "N" }}{{ /foreach }}',
+    'for'     => '{{ for 1 to 2 }}{{ no_results ? "Y" : "N" }}{{ /for }}',
+    'paired'  => '{{ items }}{{ no_results ? "Y" : "N" }}{{ /items }}',
+]);
+
+it('renders no iteration for an empty iterable, so no_results cannot be true', function (string $template): void {
+    expect(engine()->render($template, ['items' => []]))->toBe('');
+})->with([
+    'foreach' => '{{ foreach items as item }}{{ if no_results }}Y{{ /if }}body{{ /foreach }}',
+    'paired'  => '{{ items }}{{ if no_results }}Y{{ /if }}body{{ /items }}',
 ]);

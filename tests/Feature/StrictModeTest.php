@@ -113,3 +113,11 @@ it('can disable strict mode after enabling it', function (): void {
     $e = strictEngine()->setStrictMode(false);
     expect($e->render('{{ missing }}'))->toBe('');
 });
+
+it('treats loop metadata as defined variables in strict mode', function (): void {
+    expect(strictEngine()->render('{{ foreach items as item }}{{ total_results }}/{{ no_results }};{{ /foreach }}', [
+        'items' => ['a'],
+    ]))->toBe('1/false;');
+
+    expect(strictEngine()->render('{{ for 1 to 3 }}{{ key }}{{ /for }}'))->toBe('012');
+});
