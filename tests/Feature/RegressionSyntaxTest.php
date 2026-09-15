@@ -108,7 +108,7 @@ it('keeps parsing around an interpolated string inside blocks', function (): voi
 it('keeps collection operators working alongside nested streams', function (): void {
     $items = [['t' => 'a', 'n' => 1], ['t' => 'b', 'n' => 2], ['t' => 'a', 'n' => 3]];
 
-    expect(engine()->render('{{ res = items groupby (t) }}{{ res }}{{ key }}:{{ values }}{{ n }}{{ /values }};{{ /res }}', [
+    expect(engine()->render('{{ res = items groupby (t) }}{{ foreach res as grp }}{{ grp.key }}:{{ foreach grp.values as v }}{{ v.n }}{{ /foreach grp.values }};{{ /foreach }}', [
         'items' => $items,
     ]))->toBe('a:13;b:2;')
         ->and(engine()->render('{{ items take (2) | pluck:"n" | join:"," }}', ['items' => $items]))->toBe('1,2')

@@ -92,3 +92,120 @@ it('reports total_results, total and no_results from both producers', function (
             ->and($frame['no_results'])->toBeFalse();
     }
 });
+
+it('keeps metadata ahead of item fields that share their names', function (): void {
+    $frames = [];
+    $renderer = new LoopRenderer(function (array $scope) use (&$frames): string {
+        $frames[] = $scope;
+
+        return '';
+    });
+
+    $renderer->renderItems([[
+        'count'         => 'field',
+        'index'         => 'field',
+        'total'         => 'field',
+        'total_results' => 'field',
+        'no_results'    => 'field',
+        'first'         => 'field',
+        'last'          => 'field',
+        'odd'           => 'field',
+        'even'          => 'field',
+        'key'           => 'field',
+        'prev'          => 'field',
+        'next'          => 'field',
+    ]], []);
+
+    expect($frames[0]['count'])->toBe(1)
+        ->and($frames[0]['index'])->toBe(0)
+        ->and($frames[0]['total'])->toBe(1)
+        ->and($frames[0]['total_results'])->toBe(1)
+        ->and($frames[0]['no_results'])->toBeFalse()
+        ->and($frames[0]['first'])->toBeTrue()
+        ->and($frames[0]['last'])->toBeTrue()
+        ->and($frames[0]['odd'])->toBeTrue()
+        ->and($frames[0]['even'])->toBeFalse()
+        ->and($frames[0]['key'])->toBe(0)
+        ->and($frames[0]['prev'])->toBeNull()
+        ->and($frames[0]['next'])->toBeNull();
+});
+
+it('keeps item fields that no metadata name claims', function (): void {
+    $frames = [];
+    $renderer = new LoopRenderer(function (array $scope) use (&$frames): string {
+        $frames[] = $scope;
+
+        return '';
+    });
+
+    $renderer->renderItems([['title' => 'Song', 'count' => 'field']], []);
+
+    expect($frames[0]['title'])->toBe('Song')
+        ->and($frames[0]['count'])->toBe(1);
+});
+
+it('keeps a bound alias ahead of the metadata it shadows', function (): void {
+    $frames = [];
+    $renderer = new LoopRenderer(function (array $scope) use (&$frames): string {
+        $frames[] = $scope;
+
+        return '';
+    });
+
+    $renderer->renderItems([['count' => 'field']], [], 'count', 'key');
+
+    expect($frames[0]['count'])->toBe(['count' => 'field'])
+        ->and($frames[0]['key'])->toBe(0);
+});
+
+it('binds value to elements that bring no fields of their own', function (): void {
+    $frames = [];
+    $renderer = new LoopRenderer(function (array $scope) use (&$frames): string {
+        $frames[] = $scope;
+
+        return '';
+    });
+
+    $empty = new stdClass();
+
+    $renderer->renderItems([[], $empty, ['value' => 'own'], 'scalar', [1, 2], null], []);
+
+    expect($frames[0]['value'])->toBe([])
+        ->and($frames[1]['value'])->toBe($empty)
+        ->and($frames[2]['value'])->toBe('own')
+        ->and($frames[3]['value'])->toBe('scalar')
+        ->and($frames[4]['value'])->toBe([1, 2])
+        ->and($frames[5]['value'])->toBeNull();
+});
+
+it('leaves value unset for an element that brings fields of its own', function (): void {
+    $frames = [];
+    $renderer = new LoopRenderer(function (array $scope) use (&$frames): string {
+        $frames[] = $scope;
+
+        return '';
+    });
+
+    $renderer->renderItems([['title' => 'Song']], []);
+
+    expect($frames[0])->not->toHaveKey('value')
+        ->and($frames[0]['title'])->toBe('Song');
+});
+
+it('leaves value unset for an element whose fields all collide with metadata', function (): void {
+    $frames = [];
+    $renderer = new LoopRenderer(function (array $scope) use (&$frames): string {
+        $frames[] = $scope;
+
+        return '';
+    });
+
+    $renderer->renderItems([['count' => 'C']], []);
+
+    expect($frames[0])->not->toHaveKey('value')
+        ->and($frames[0]['count'])->toBe(1)
+        ->and(array_keys($frames[0]))->toBe([
+            'count', 'index', 'total', 'total_results', 'no_results', 'first',
+            'last', 'odd', 'even', 'key', 'prev', 'next',
+        ]);
+});

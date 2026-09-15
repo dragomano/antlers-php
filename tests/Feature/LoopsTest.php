@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Engine;
+use Bugo\Antlers\Exceptions\AntlersRuntimeException;
+
 function loopMetadataBody(): string
 {
     return '{{ count }}/{{ index }}/{{ total }}/{{ total_results }}/{{ no_results ? "T" : "N" }}'
@@ -231,4 +234,86 @@ it('renders no iteration for an empty iterable, so no_results cannot be true', f
 })->with([
     'foreach' => '{{ foreach items as item }}{{ if no_results }}Y{{ /if }}body{{ /foreach }}',
     'paired'  => '{{ items }}{{ if no_results }}Y{{ /if }}body{{ /items }}',
+]);
+
+function metadataItem(): array
+{
+    return [
+        'count'         => 'field',
+        'index'         => 'field',
+        'total'         => 'field',
+        'total_results' => 'field',
+        'no_results'    => 'field',
+        'first'         => 'field',
+        'last'          => 'field',
+        'odd'           => 'field',
+        'even'          => 'field',
+        'key'           => 'field',
+        'prev'          => 'field',
+        'next'          => 'field',
+    ];
+}
+
+it('keeps loop metadata ahead of item fields that share their names', function (string $template): void {
+    expect(engine()->render($template, ['items' => [metadataItem()]]))
+        ->toBe('1/0/1/1/N/F/L/o/0;');
+})->with([
+    'foreach' => '{{ foreach items as item }}' . loopMetadataBody() . '{{ /foreach }}',
+    'for'     => '{{ for 1 to 1 }}' . loopMetadataBody() . '{{ /for }}',
+    'paired'  => '{{ items }}' . loopMetadataBody() . '{{ /items }}',
+]);
+
+it('keeps prev and next metadata ahead of item fields that share their names', function (string $template): void {
+    expect(engine()->render($template, ['items' => [metadataItem()]]))->toBe('[]');
+})->with([
+    'foreach' => '{{ foreach items as item }}[{{ prev }}{{ next }}]{{ /foreach }}',
+    'for'     => '{{ for 1 to 1 }}[{{ prev }}{{ next }}]{{ /for }}',
+    'paired'  => '{{ items }}[{{ prev }}{{ next }}]{{ /items }}',
+]);
+
+it('reaches a shadowed item field through the alias', function (string $template): void {
+    expect(engine()->render($template, ['items' => [['count' => 'C', 'key' => 'K']]]))
+        ->toBe('C/K|1/0;');
+})->with([
+    'foreach alias'     => ['{{ foreach items as item }}{{ item.count }}/{{ item.key }}|{{ count }}/{{ key }};{{ /foreach }}'],
+    'foreach tag alias' => ['{{ foreach:items as="k|v" }}{{ v.count }}/{{ v.key }}|{{ count }}/{{ key }};{{ /foreach:items }}'],
+]);
+
+it('defines value for an element that brings no fields of its own', function (string $template, array $items, string $expected): void {
+    expect(engine()->render($template, ['items' => $items]))->toBe($expected);
+})->with([
+    'foreach with an empty array element'  => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [[]], '[]'],
+    'foreach with an empty object element' => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [new stdClass()], '[]'],
+    'paired with an empty array element'   => ['{{ items }}[{{ value }}]{{ /items }}', [[]], '[]'],
+    'foreach with a pure list element'     => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [[1, 2]], '[12]'],
+    'foreach with a scalar element'        => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', ['x'], '[x]'],
+    'foreach with a null element'          => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [null], '[]'],
+    'foreach with an item owning value'    => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [['value' => 'own']], '[own]'],
+]);
+
+it('defines value for an element that brings no fields of its own in strict mode', function (string $template, array $items, string $expected): void {
+    expect((new Engine())->setStrictMode(true)->render($template, ['items' => $items]))->toBe($expected);
+})->with([
+    'foreach with an empty array element'  => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [[]], '[]'],
+    'foreach with an empty object element' => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [new stdClass()], '[]'],
+    'paired with an empty array element'   => ['{{ items }}[{{ value }}]{{ /items }}', [[]], '[]'],
+    'foreach with a pure list element'     => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [[1, 2]], '[12]'],
+    'foreach with an empty string'         => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [''], '[]'],
+    'foreach with a zero'                  => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [0], '[0]'],
+    'foreach with a false'                 => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [false], '[false]'],
+    'foreach with a null element'          => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [null], '[]'],
+    'foreach with an item owning value'    => ['{{ foreach items as item }}[{{ value }}]{{ /foreach }}', [['value' => 'own']], '[own]'],
+]);
+
+it('leaves value undefined for an element that brings fields of its own', function (string $template, array $items): void {
+    $data = ['items' => $items];
+
+    expect(engine()->render($template, $data))->toBe('[|]')
+        ->and(fn(): string => (new Engine())->setStrictMode(true)->render($template, $data))
+        ->toThrow(AntlersRuntimeException::class, 'Undefined variable: "value"');
+})->with([
+    'foreach'                       => ['{{ foreach items as item }}[{{ value }}|{{ value.title }}]{{ /foreach }}', [['title' => 'a']]],
+    'paired'                        => ['{{ items }}[{{ value }}|{{ value.title }}]{{ /items }}', [['title' => 'a']]],
+    'foreach with colliding fields' => ['{{ foreach items as item }}[{{ value }}|{{ value.title }}]{{ /foreach }}', [['count' => 'C']]],
+    'paired with colliding fields'  => ['{{ items }}[{{ value }}|{{ value.title }}]{{ /items }}', [['count' => 'C']]],
 ]);

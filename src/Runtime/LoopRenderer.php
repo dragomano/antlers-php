@@ -48,10 +48,12 @@ final readonly class LoopRenderer
                 $index < $total ? ($itemValues[$index] ?? null) : null,
             );
 
-            $itemScope = ValueCoercion::toScopeFrame($item);
-            $loopVars  = $itemScope !== null
-                ? array_merge($loopVars, $itemScope)
-                : array_merge($loopVars, ['value' => $item]);
+            $itemScope = ValueCoercion::toScopeFrame($item) ?? [];
+            $loopVars  = array_merge($loopVars, array_diff_key($itemScope, $loopVars));
+
+            if ($itemScope === []) {
+                $loopVars = array_merge($loopVars, ['value' => $item]);
+            }
 
             if ($alias !== null) {
                 $loopVars = array_merge($loopVars, [$alias => $item]);
