@@ -220,7 +220,7 @@ describe('ExpressionEvaluator', function (): void {
                 new BinaryOpNode(new BooleanNode(true), '||', new VariableNode('missing')),
                 [],
             ))->toBeTrue()
-            ->and($plain->evaluate(new BinaryOpNode(new NumberNode(2), '^', new NumberNode(3)), []))->toBe(8.0)
+            ->and($plain->evaluate(new BinaryOpNode(new NumberNode(2), '^', new NumberNode(3)), []))->toBe(8)
             ->and($plain->evaluate(new UnaryOpNode('-', new NumberNode(5)), []))->toBe(-5);
     });
 

@@ -87,6 +87,58 @@ final class ValueCoercion
         return null;
     }
 
+    public static function add(int|float $left, int|float $right): int|float
+    {
+        return is_int($left) && is_int($right) ? $left + $right : (float) $left + (float) $right;
+    }
+
+    public static function subtract(int|float $left, int|float $right): int|float
+    {
+        return is_int($left) && is_int($right) ? $left - $right : (float) $left - (float) $right;
+    }
+
+    public static function multiply(int|float $left, int|float $right): int|float
+    {
+        return is_int($left) && is_int($right) ? $left * $right : (float) $left * (float) $right;
+    }
+
+    public static function divide(int|float $left, int|float $right): int|float
+    {
+        return is_int($left) && is_int($right) ? $left / $right : (float) $left / (float) $right;
+    }
+
+    public static function modulo(int|float $left, int|float $right): int|float
+    {
+        return is_int($left) && is_int($right) ? $left % $right : fmod($left, $right);
+    }
+
+    public static function power(int|float $left, int|float $right): int|float
+    {
+        return is_int($left) && is_int($right) ? $left ** $right : floatval($left) ** floatval($right);
+    }
+
+    public static function toNumber(mixed $value): int|float
+    {
+        if (is_int($value) || is_float($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && is_numeric($value)) {
+            return str_contains($value, '.') ? (float) $value : (int) $value;
+        }
+
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+
+        return 0;
+    }
+
+    public static function compare(mixed $left, mixed $right): int
+    {
+        return self::sortableValue($left) <=> self::sortableValue($right);
+    }
+
     /**
      * @param  array<array-key, mixed> $data
      * @return array<string, mixed>
@@ -97,5 +149,18 @@ final class ValueCoercion
         $stringKeyed = array_filter($data, is_string(...), ARRAY_FILTER_USE_KEY);
 
         return $stringKeyed;
+    }
+
+    private static function sortableValue(mixed $value): int|float|string
+    {
+        if (is_int($value) || is_float($value) || is_string($value)) {
+            return $value;
+        }
+
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+
+        return self::toString($value);
     }
 }

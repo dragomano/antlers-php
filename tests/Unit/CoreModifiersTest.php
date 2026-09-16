@@ -120,8 +120,12 @@ it('covers numeric conversions used by truncate, add and format', function (): v
         ->and($registry->apply('truncate', 'Hello', [true], []))->toBe('H...')
         ->and($registry->apply('truncate', 'Hello', [new stdClass()], []))->toBe('...')
         ->and($registry->apply('add', '1.5', ['2.25'], []))->toBe(3.75)
-        ->and($registry->apply('add', true, [false], []))->toBe(1.0)
-        ->and($registry->apply('add', new stdClass(), [new stdClass()], []))->toBe(0.0)
+        ->and($registry->apply('add', true, [false], []))->toBe(1)
+        ->and($registry->apply('add', new stdClass(), [new stdClass()], []))->toBe(0)
+        ->and($registry->apply('ceil', '3.7', [], []))->toBe(4)
+        ->and($registry->apply('ceil', true, [], []))->toBe(1)
+        ->and($registry->apply('floor', new stdClass(), [], []))->toBe(0)
+        ->and($registry->apply('round', false, [0], []))->toBe(0.0)
         ->and($registry->apply('format', '1711929600', ['Y-m-d'], []))->toBe('2024-04-01');
 });
 

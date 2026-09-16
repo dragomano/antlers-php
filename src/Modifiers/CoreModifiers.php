@@ -167,19 +167,19 @@ final class CoreModifiers
             return $before . self::string($v) . $after;
         });
 
-        $registry->register('add', static fn(mixed $v, array $p): float
-            => self::float($v) + self::float($p[0] ?? 0));
+        $registry->register('add', static fn(mixed $v, array $p): int|float
+            => ValueCoercion::add(ValueCoercion::toNumber($v), ValueCoercion::toNumber($p[0] ?? 0)));
 
-        $registry->register('subtract', static fn(mixed $v, array $p): float
-            => self::float($v) - self::float($p[0] ?? 0));
+        $registry->register('subtract', static fn(mixed $v, array $p): int|float
+            => ValueCoercion::subtract(ValueCoercion::toNumber($v), ValueCoercion::toNumber($p[0] ?? 0)));
 
-        $registry->register('multiply', static fn(mixed $v, array $p): float
-            => self::float($v) * self::float($p[0] ?? 1));
+        $registry->register('multiply', static fn(mixed $v, array $p): int|float
+            => ValueCoercion::multiply(ValueCoercion::toNumber($v), ValueCoercion::toNumber($p[0] ?? 1)));
 
-        $registry->register('divide', static function (mixed $v, array $p): float {
-            $divisor = self::float($p[0] ?? 1);
+        $registry->register('divide', static function (mixed $v, array $p): int|float {
+            $divisor = ValueCoercion::toNumber($p[0] ?? 1);
 
-            return $divisor !== 0.0 ? self::float($v) / $divisor : 0.0;
+            return $divisor != 0 ? ValueCoercion::divide(ValueCoercion::toNumber($v), $divisor) : 0;
         });
 
         $registry->register('mod', static function (mixed $v, array $p): int {
@@ -203,13 +203,13 @@ final class CoreModifiers
 
             $key = isset($p[0]) ? self::string($p[0]) : null;
             if ($key !== null) {
-                usort($items, static fn(mixed $a, mixed $b): int => self::dataGet($a, $key)
-                    <=> self::dataGet($b, $key));
+                usort($items, static fn(mixed $a, mixed $b): int
+                    => ValueCoercion::compare(self::dataGet($a, $key), self::dataGet($b, $key)));
 
                 return $items;
             }
 
-            sort($items);
+            usort($items, ValueCoercion::compare(...));
 
             return $items;
         });

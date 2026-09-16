@@ -168,27 +168,27 @@ final class ExpressionEvaluator
         $rightNumeric = $this->coerceNumeric($right->value);
 
         return match ($op) {
-            '+'     => (float) $leftNumeric + (float) $rightNumeric,
-            '-'     => (float) $leftNumeric - (float) $rightNumeric,
-            '*'     => (float) $leftNumeric * (float) $rightNumeric,
+            '+'     => ValueCoercion::add($leftNumeric, $rightNumeric),
+            '-'     => ValueCoercion::subtract($leftNumeric, $rightNumeric),
+            '*'     => ValueCoercion::multiply($leftNumeric, $rightNumeric),
             '/'     => $rightNumeric != 0
-                        ? (float) $leftNumeric / (float) $rightNumeric
+                        ? ValueCoercion::divide($leftNumeric, $rightNumeric)
                         : throw new AntlersRuntimeException('Division by zero'),
             '%'     => $rightNumeric != 0
-                        ? fmod((float) $leftNumeric, (float) $rightNumeric)
+                        ? ValueCoercion::modulo($leftNumeric, $rightNumeric)
                         : throw new AntlersRuntimeException('Modulo by zero'),
             '**',
-            '^'     => $this->power((float) $leftNumeric, (float) $rightNumeric),
+            '^'     => ValueCoercion::power($leftNumeric, $rightNumeric),
             '.'     => $this->stringify($left->value) . $this->stringify($right->value),
-            '<=>'   => $this->compareSortValues($left->value, $right->value),
+            '<=>'   => ValueCoercion::compare($left->value, $right->value),
             '=='    => $left->value == $right->value,
             '!='    => $left->value != $right->value,
             '==='   => $left->value === $right->value,
             '!=='   => $left->value !== $right->value,
-            '<'     => $left->value < $right->value,
-            '>'     => $left->value > $right->value,
-            '<='    => $left->value <= $right->value,
-            '>='    => $left->value >= $right->value,
+            '<'     => ValueCoercion::compare($left->value, $right->value) < 0,
+            '>'     => ValueCoercion::compare($left->value, $right->value) > 0,
+            '<='    => ValueCoercion::compare($left->value, $right->value) <= 0,
+            '>='    => ValueCoercion::compare($left->value, $right->value) >= 0,
             default => throw new AntlersRuntimeException('Unknown binary operator: ' . $op),
         };
     }
@@ -387,24 +387,7 @@ final class ExpressionEvaluator
 
     private function coerceNumeric(mixed $value): int|float
     {
-        if (is_int($value) || is_float($value)) {
-            return $value;
-        }
-
-        if (is_string($value) && is_numeric($value)) {
-            return str_contains($value, '.') ? (float) $value : (int) $value;
-        }
-
-        if (is_bool($value)) {
-            return $value ? 1 : 0;
-        }
-
-        return 0;
-    }
-
-    private function power(float $left, float $right): float
-    {
-        return $left ** $right;
+        return ValueCoercion::toNumber($value);
     }
 
     /**
@@ -547,7 +530,8 @@ final class ExpressionEvaluator
                 }
 
                 $direction = $this->sortDirection($argument->direction, $scope, $assignmentWriter);
-                $result    = $this->compareSortValues(
+
+                $result = ValueCoercion::compare(
                     $this->evaluateCollectionField($argument->field, $left, $scope, $assignmentWriter),
                     $this->evaluateCollectionField($argument->field, $right, $scope, $assignmentWriter),
                 );
@@ -647,24 +631,6 @@ final class ExpressionEvaluator
         }
 
         return $this->normalizeSortDirection($this->evaluate($direction, $scope, $assignmentWriter));
-    }
-
-    private function compareSortValues(mixed $left, mixed $right): int
-    {
-        return $this->sortableValue($left) <=> $this->sortableValue($right);
-    }
-
-    private function sortableValue(mixed $value): int|float|string
-    {
-        if (is_int($value) || is_float($value) || is_string($value)) {
-            return $value;
-        }
-
-        if (is_bool($value)) {
-            return $value ? 1 : 0;
-        }
-
-        return $this->stringify($value);
     }
 
     private function inferCollectionFieldAlias(AbstractNode $field): string
