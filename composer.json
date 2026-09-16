@@ -40,6 +40,7 @@
     "phpstan": "vendor/bin/phpstan analyse -l 10 src --memory-limit=512M --debug --no-progress",
     "psalm": "vendor/bin/psalm --stats --no-cache",
     "test": "vendor/bin/pest --colors=always --display-warnings",
+    "test-mutate": "vendor/bin/pest -d memory_limit=1G --colors=always --mutate --path=src --min=98",
     "test-coverage": "vendor/bin/pest -d memory_limit=1G --colors=always --coverage --min=100",
     "test-coverage-clover": "vendor/bin/pest --colors=always --min=100 --coverage-clover coverage.xml",
     "test-coverage-html": "vendor/bin/pest --colors=always --min=100 --coverage-html coverage"
