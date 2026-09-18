@@ -11,7 +11,7 @@ use Closure;
 
 final class TagInvoker
 {
-    /** @var list<array{name: string, method: string, line: int, signature: string}> */
+    /** @var list<array{name: string, method: string, line: int, signature: ?string, node: TagNode}> */
     private array $contexts = [];
 
     /**
@@ -60,12 +60,43 @@ final class TagInvoker
         }
     }
 
-    /** @return array{name: string, method: string, line: int, signature: string}|null */
+    /** @return array{name: string, method: string, line: int, signature: ?string}|null */
     public function currentContext(): ?array
     {
         $key = array_key_last($this->contexts);
 
-        return $key === null ? null : $this->contexts[$key];
+        if (! is_int($key)) {
+            return null;
+        }
+
+        return [
+            'name'      => $this->contexts[$key]['name'],
+            'method'    => $this->contexts[$key]['method'],
+            'line'      => $this->contexts[$key]['line'],
+            'signature' => $this->contexts[$key]['signature'],
+        ];
+    }
+
+    public function currentSignature(): ?string
+    {
+        $key = array_key_last($this->contexts);
+
+        if (! is_int($key)) {
+            return null;
+        }
+
+        $context = $this->contexts[$key];
+
+        if ($context['signature'] === null) {
+            $node = $context['node'];
+            $context['signature'] = hash('sha256', serialize([
+                $node->parameters,
+                $node->children,
+            ]));
+            $this->contexts[$key] = $context;
+        }
+
+        return $context['signature'];
     }
 
     private function pushContext(TagNode $node): void
@@ -74,10 +105,8 @@ final class TagInvoker
             'name'      => $node->name,
             'method'    => $node->method,
             'line'      => $node->line,
-            'signature' => hash('sha256', serialize([
-                $node->parameters,
-                $node->children,
-            ])),
+            'signature' => null,
+            'node'      => $node,
         ];
     }
 }

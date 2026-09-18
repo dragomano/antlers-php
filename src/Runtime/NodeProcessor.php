@@ -707,7 +707,7 @@ final class NodeProcessor
             $context['name'],
             $context['method'],
             (string) $context['line'],
-            $context['signature'],
+            $this->tagInvoker->currentSignature() ?? '',
         ]);
     }
 
