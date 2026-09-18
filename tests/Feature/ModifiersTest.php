@@ -281,6 +281,19 @@ it('applies sort modifier', function (): void {
         ->toBe('[1,2,3]');
 });
 
+it('applies sort direction and preserves associative keys', function (): void {
+    expect(engineWithJson()->render('{{ items | sort:"desc" | to_json }}', [
+        'items' => ['first' => 1, 'second' => 3, 'third' => 2],
+    ]))->toBe('{"second":3,"third":2,"first":1}')
+        ->and(engineWithJson()->render('{{ items | sort:"name":"desc" | to_json }}', [
+            'items' => [
+                'alice'   => ['name' => 'Alice'],
+                'charlie' => ['name' => 'Charlie'],
+                'bob'     => ['name' => 'Bob'],
+            ],
+        ]))->toBe('{"charlie":{"name":"Charlie"},"bob":{"name":"Bob"},"alice":{"name":"Alice"}}');
+});
+
 it('applies first modifier', function (): void {
     expect(engineWithJson()->render('{{ items | first:2 | to_json }}', ['items' => [1, 2, 3]]))
         ->toBe('[1,2]');

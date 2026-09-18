@@ -201,17 +201,22 @@ final class CoreModifiers
                 return $v;
             }
 
-            $key = isset($p[0]) ? self::string($p[0]) : null;
-            if ($key !== null) {
-                usort($items, static fn(mixed $a, mixed $b): int
-                    => ValueCoercion::compare(self::dataGet($a, $key), self::dataGet($b, $key)));
+            $isList    = array_is_list($items);
+            $first     = isset($p[0]) ? strtolower(self::string($p[0])) : null;
+            $key       = $first === 'asc' || $first === 'desc' ? null : $first;
+            $direction = $key === null ? ($first ?? 'asc') : strtolower(self::string($p[1] ?? 'asc'));
+            $direction = $direction === 'desc' ? -1 : 1;
 
-                return $items;
+            if ($key !== null) {
+                uasort($items, static fn(mixed $a, mixed $b): int
+                    => $direction * ValueCoercion::compare(self::dataGet($a, $key), self::dataGet($b, $key)));
             }
 
-            usort($items, ValueCoercion::compare(...));
+            if ($key === null) {
+                uasort($items, static fn(mixed $a, mixed $b): int => $direction * ValueCoercion::compare($a, $b));
+            }
 
-            return $items;
+            return $isList ? array_values($items) : $items;
         });
 
         $registry->register('first', static function (mixed $v, array $p): mixed {
