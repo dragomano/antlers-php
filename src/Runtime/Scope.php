@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Runtime;
 
+use Traversable;
+
 /**
  * The data frame stack of one render.
  *
@@ -19,13 +21,19 @@ final class Scope
     /** @var array<string, mixed>|null */
     private ?array $flattened = null;
 
+    /** @var array<string, mixed> */
+    private readonly array $globals;
+
     /** @param array<string, mixed> $globals */
-    public function __construct(private readonly array $globals = []) {}
+    public function __construct(array $globals = [])
+    {
+        $this->globals = $this->materializeFrame($globals);
+    }
 
     /** @param array<string, mixed> $frame */
     public function push(array $frame): void
     {
-        $this->frames[]  = $frame;
+        $this->frames[]  = $this->materializeFrame($frame);
         $this->flattened = null;
     }
 
@@ -61,5 +69,36 @@ final class Scope
     public function all(): array
     {
         return $this->flattened ??= array_merge($this->globals, ...$this->frames);
+    }
+
+    /** @param array<string, mixed> $value
+     *  @return array<string, mixed>
+     */
+    private function materializeFrame(array $value): array
+    {
+        return array_replace(
+            $value,
+            array_map(self::materialize(...), $value),
+        );
+    }
+
+    private static function materialize(mixed $value): mixed
+    {
+        if ($value instanceof Traversable) {
+            $value = iterator_to_array($value);
+        }
+
+        return is_array($value) ? self::materializeArray($value) : $value;
+    }
+
+    /** @param array<array-key, mixed> $value
+     *  @return array<array-key, mixed>
+     */
+    private static function materializeArray(array $value): array
+    {
+        return array_replace(
+            $value,
+            array_map(self::materialize(...), $value),
+        );
     }
 }

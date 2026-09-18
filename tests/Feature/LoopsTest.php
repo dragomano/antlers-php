@@ -75,6 +75,23 @@ it('iterates Traversable collections like arrays in paired loops', function (): 
     expect(engine()->render($tpl, $data))->toBe('A|B|');
 });
 
+it('materializes Traversable values once and shares truthiness with iteration', function (): void {
+    $items = (function (): Generator {
+        yield ['title' => 'A'];
+        yield ['title' => 'B'];
+    })();
+
+    expect(engine()->render('{{ if items }}Y{{ /if }}{{ items }}{{ title }}|{{ /items }}', ['items' => $items]))
+        ->toBe('YA|B|');
+});
+
+it('treats an empty Traversable as false and empty in paired blocks', function (): void {
+    $items = new ArrayIterator([]);
+
+    expect(engine()->render('{{ if items }}Y{{ /if }}{{ items }}X{{ /items }}', ['items' => $items]))
+        ->toBe('');
+});
+
 it('supports colon notation for variables', function (): void {
     $tpl  = '{{ user:profile:name }}';
     $data = ['user' => ['profile' => ['name' => 'Alice']]];

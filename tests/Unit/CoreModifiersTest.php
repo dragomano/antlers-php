@@ -158,11 +158,13 @@ it('supports numeric parameter keys and object-aware pluck lookups', function ()
     };
 
     $missingObject = new class {};
+    $arrayAccess   = new ArrayObject(['name' => 'Diana']);
 
     expect($registry->apply('pluck', [[10, 'Alice'], [20, 'Bob']], [0], []))->toBe([10, 20])
         ->and($registry->apply('pluck', [$propertyObject], ['name'], []))->toBe(['Alice'])
         ->and($registry->apply('pluck', [$methodObject], ['name'], []))->toBe(['Bob'])
         ->and($registry->apply('pluck', [$getterObject], ['name'], []))->toBe(['Carol'])
+        ->and($registry->apply('pluck', [$arrayAccess], ['name'], []))->toBe(['Diana'])
         ->and($registry->apply('pluck', [$missingObject], ['name'], []))->toBe([null]);
 });
 
