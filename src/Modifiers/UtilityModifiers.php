@@ -8,7 +8,7 @@ use Bugo\Antlers\Runtime\RuntimeOptions;
 
 final class UtilityModifiers
 {
-    public const NAMES = ['is_empty', 'is_array', 'is_numeric', 'md5', 'format'];
+    public const NAMES = ['is_empty', 'is_array', 'is_numeric', 'type_of', 'md5', 'format'];
 
     public static function register(ModifierRegistry $registry, RuntimeOptions $options): void
     {

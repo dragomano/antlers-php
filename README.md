@@ -367,7 +367,7 @@ This project intentionally supports an official subset of Statamic modifiers tha
 
 | Status | Modifiers |
 |--------|-----------|
-| Supported official subset | `add`, `ceil`, `chunk`, `contains`, `count`, `decode`, `divide`, `ends_with`, `entities`, `explode`, `first`, `flatten`, `floor`, `format`, `is_array`, `is_empty`, `is_numeric`, `join`, `kebab`, `keys`, `last`, `lcfirst`, `length`, `limit`, `lower`, `markdown`, `md5`, `mod`, `multiply`, `nl2br`, `pad`, `pluck`, `regex_replace`, `repeat`, `replace`, `reverse`, `round`, `sanitize`, `slugify`, `snake`, `sort`, `starts_with`, `strip_tags`, `studly`, `subtract`, `surround`, `title`, `trim`, `truncate`, `ucfirst`, `unique`, `upper`, `values`, `where`, `word_count`, `wrap` |
+| Supported official subset | `add`, `ceil`, `chunk`, `contains`, `count`, `decode`, `divide`, `ends_with`, `entities`, `explode`, `first`, `flatten`, `floor`, `format`, `is_array`, `is_empty`, `is_numeric`, `join`, `kebab`, `keys`, `last`, `lcfirst`, `length`, `limit`, `lower`, `markdown`, `md5`, `mod`, `multiply`, `nl2br`, `pad`, `pluck`, `regex_replace`, `repeat`, `replace`, `reverse`, `round`, `sanitize`, `slugify`, `snake`, `sort`, `starts_with`, `strip_tags`, `studly`, `subtract`, `surround`, `title`, `trim`, `truncate`, `type_of`, `ucfirst`, `unique`, `upper`, `values`, `where`, `word_count`, `wrap` |
 
 ### Disputed Statamic Modifiers
 
@@ -471,6 +471,7 @@ Current standalone strategy:
 | `is_empty` | Check if empty | `{{ items \| is_empty }}` |
 | `is_array` | Check if value is an array | `{{ items \| is_array }}` |
 | `is_numeric` | Check if value is numeric | `{{ value \| is_numeric }}` |
+| `type_of` | Return the native value type | `{{ value \| type_of }}` |
 | `md5` | MD5 hash | `{{ email \| md5 }}` |
 </details>
 

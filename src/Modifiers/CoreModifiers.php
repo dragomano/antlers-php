@@ -325,6 +325,8 @@ final class CoreModifiers
 
         $registry->register('is_numeric', static fn(mixed $v): bool => is_numeric($v));
 
+        $registry->register('type_of', static fn(mixed $v): string => gettype($v));
+
         $registry->register('md5', static fn(mixed $v): string => md5(self::string($v)));
 
         $registry->register('format', static function (mixed $v, array $p): string {

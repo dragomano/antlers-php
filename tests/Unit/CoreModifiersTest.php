@@ -65,6 +65,7 @@ it('registers the standalone mandatory modifiers from the spec', function (): vo
         'is_array',
         'is_empty',
         'is_numeric',
+        'type_of',
         'markdown',
     ];
 
@@ -111,6 +112,18 @@ it('converts scalars and stringable objects consistently', function (): void {
         ->and($registry->apply('wrap', $stringable, ['span'], []))->toBe('<span>value-from-object</span>')
         ->and($registry->apply('join', $stringable, [], []))->toBe('value-from-object')
         ->and($registry->apply('join', new stdClass(), [], []))->toBe('');
+});
+
+it('reports native PHP value types', function (): void {
+    $registry = coreModifierRegistry();
+
+    expect($registry->apply('type_of', 'text', [], []))->toBe('string')
+        ->and($registry->apply('type_of', [1, 2], [], []))->toBe('array')
+        ->and($registry->apply('type_of', false, [], []))->toBe('boolean')
+        ->and($registry->apply('type_of', 42, [], []))->toBe('integer')
+        ->and($registry->apply('type_of', 26.2, [], []))->toBe('double')
+        ->and($registry->apply('type_of', null, [], []))->toBe('NULL')
+        ->and($registry->apply('type_of', new stdClass(), [], []))->toBe('object');
 });
 
 it('covers numeric conversions used by truncate, add and format', function (): void {

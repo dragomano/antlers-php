@@ -90,6 +90,13 @@ it('applies count modifier on string and array', function (): void {
         ->and(engine()->render('{{ items | count }}', ['items' => [1, 2, 3]]))->toBe('3');
 });
 
+it('reports the type of a value', function (): void {
+    expect(engine()->render('{{ value | type_of }}', ['value' => 42]))->toBe('integer')
+        ->and(engine()->render('{{ value | type_of }}', ['value' => 26.2]))->toBe('double')
+        ->and(engine()->render('{{ value | type_of }}', ['value' => false]))->toBe('boolean')
+        ->and(engine()->render('{{ value | type_of }}', ['value' => [1, 2]]))->toBe('array');
+});
+
 it('applies word_count modifier', function (): void {
     expect(engine()->render('{{ text | word_count }}', ['text' => 'one two three']))
         ->toBe('3');

@@ -367,7 +367,7 @@ Expected ")" but found end of expression on line 5 in "( 1 + 2"
 
 | Статус | Модификаторы |
 |--------|--------------|
-| Поддерживаемый официальный поднабор | `add`, `ceil`, `chunk`, `contains`, `count`, `decode`, `divide`, `ends_with`, `entities`, `explode`, `first`, `flatten`, `floor`, `format`, `is_array`, `is_empty`, `is_numeric`, `join`, `kebab`, `keys`, `last`, `lcfirst`, `length`, `limit`, `lower`, `markdown`, `md5`, `mod`, `multiply`, `nl2br`, `pad`, `pluck`, `regex_replace`, `repeat`, `replace`, `reverse`, `round`, `sanitize`, `slugify`, `snake`, `sort`, `starts_with`, `strip_tags`, `studly`, `subtract`, `surround`, `title`, `trim`, `truncate`, `ucfirst`, `unique`, `upper`, `values`, `where`, `word_count`, `wrap` |
+| Поддерживаемый официальный поднабор | `add`, `ceil`, `chunk`, `contains`, `count`, `decode`, `divide`, `ends_with`, `entities`, `explode`, `first`, `flatten`, `floor`, `format`, `is_array`, `is_empty`, `is_numeric`, `join`, `kebab`, `keys`, `last`, `lcfirst`, `length`, `limit`, `lower`, `markdown`, `md5`, `mod`, `multiply`, `nl2br`, `pad`, `pluck`, `regex_replace`, `repeat`, `replace`, `reverse`, `round`, `sanitize`, `slugify`, `snake`, `sort`, `starts_with`, `strip_tags`, `studly`, `subtract`, `surround`, `title`, `trim`, `truncate`, `type_of`, `ucfirst`, `unique`, `upper`, `values`, `where`, `word_count`, `wrap` |
 
 ### Спорные модификаторы Statamic
 
@@ -471,6 +471,7 @@ Expected ")" but found end of expression on line 5 in "( 1 + 2"
 | `is_empty` | Проверить на пустоту | `{{ items \| is_empty }}` |
 | `is_array` | Проверить, что значение является массивом | `{{ items \| is_array }}` |
 | `is_numeric` | Проверить, что значение числовое | `{{ value \| is_numeric }}` |
+| `type_of` | Получить тип значения (`string`, `array`, `boolean`, `integer`, `double`) | `{{ value \| type_of }}` |
 | `md5` | MD5-хеш | `{{ email \| md5 }}` |
 </details>
 
