@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Bugo\Antlers\Exceptions\AntlersRuntimeException;
+
 it('keeps int arithmetic exact', function (string $template, string $expected): void {
     expect(engine()->render($template))->toBe($expected);
 })->with([
@@ -20,6 +22,19 @@ it('still computes float arithmetic', function (string $template, string $expect
     'float power'     => ['{{ 2 ** 0.5 }}', '1.4142135623731'],
     'division'        => ['{{ 10 / 4 }}', '2.5'],
 ]);
+
+it('routes division and modulo by zero through the lenient policy', function (): void {
+    expect(engine()->render('{{ 1 / 0 }}'))->toBe('')
+        ->and(engine()->render('{{ 1 % 0 }}'))->toBe('');
+});
+
+it('reports division and modulo by zero in strict mode', function (): void {
+    expect(fn(): string => engine()->setStrictMode(true)->render('{{ 1 / 0 }}'))
+        ->toThrow(AntlersRuntimeException::class, 'Division by zero');
+
+    expect(fn(): string => engine()->setStrictMode(true)->render('{{ 1 % 0 }}'))
+        ->toThrow(AntlersRuntimeException::class, 'Modulo by zero');
+});
 
 it('adds ints through the add modifier like the + operator', function (): void {
     expect(engine()->render('{{ x | add:1 }}', ['x' => 9007199254740993]))

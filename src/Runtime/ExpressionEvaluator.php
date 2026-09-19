@@ -173,10 +173,10 @@ final class ExpressionEvaluator
             '*'     => ValueCoercion::multiply($leftNumeric, $rightNumeric),
             '/'     => $rightNumeric != 0
                         ? ValueCoercion::divide($leftNumeric, $rightNumeric)
-                        : throw new AntlersRuntimeException('Division by zero'),
+                        : $this->options->fail('Division by zero', ''),
             '%'     => $rightNumeric != 0
                         ? ValueCoercion::modulo($leftNumeric, $rightNumeric)
-                        : throw new AntlersRuntimeException('Modulo by zero'),
+                        : $this->options->fail('Modulo by zero', ''),
             '**',
             '^'     => ValueCoercion::power($leftNumeric, $rightNumeric),
             '.'     => $this->stringify($left->value) . $this->stringify($right->value),
