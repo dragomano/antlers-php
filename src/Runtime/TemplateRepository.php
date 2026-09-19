@@ -59,6 +59,8 @@ final class TemplateRepository
 
         try {
             return $renderer($this->parseFile($resolved), $data);
+        } catch (AntlersRuntimeException $e) {
+            throw $e->atTemplate(basename($resolved));
         } finally {
             $this->locator->popTemplate();
             array_pop($this->renderStack);

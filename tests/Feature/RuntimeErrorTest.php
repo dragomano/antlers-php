@@ -61,3 +61,44 @@ it('keeps the original failure in the exception chain', function (): void {
         ->and($error->getPrevious())->toBeInstanceOf(AntlersRuntimeException::class)
         ->and($error->getPrevious()?->getMessage())->toBe('Division by zero');
 });
+
+/*
+ * With a file behind the render the message also names the template, so an
+ * error inside a partial blames the partial by basename, not the view that
+ * included it, and the innermost file wins just like the innermost line.
+ */
+
+function runtimeErrorForFile(string $path): AntlersRuntimeException
+{
+    try {
+        engine()->setStrictMode(true)->renderFile($path);
+    } catch (AntlersRuntimeException $e) {
+        return $e;
+    }
+
+    throw new RuntimeException('Expected AntlersRuntimeException was not thrown.');
+}
+
+it('names the rendered file in a top-level runtime failure', function (): void {
+    $error = runtimeErrorForFile(__DIR__ . '/../Fixtures/RuntimeError/broken-view.antlers.html');
+
+    expect($error->templateName)->toBe('broken-view.antlers.html')
+        ->and($error->templateLine)->toBe(2)
+        ->and($error->getMessage())->toBe('Undefined variable: "missing" in broken-view.antlers.html on line 2');
+});
+
+it('blames the partial file, not the view that included it', function (): void {
+    $error = runtimeErrorForFile(__DIR__ . '/../Fixtures/RuntimeError/partial/wrapper.antlers.html');
+
+    expect($error->templateName)->toBe('broken-partial.antlers.html')
+        ->and($error->templateLine)->toBe(3)
+        ->and($error->getMessage())->toBe('Undefined variable: "missing" in broken-partial.antlers.html on line 3');
+});
+
+it('omits the file segment for an inline (string) render', function (): void {
+    $error = runtimeErrorFor("L1\n{{ missing }}");
+
+    expect($error->templateName)->toBeNull()
+        ->and($error->getMessage())->not->toContain(' in ')
+        ->and($error->getMessage())->toBe('Undefined variable: "missing" on line 2');
+});
