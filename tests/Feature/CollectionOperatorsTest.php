@@ -74,6 +74,17 @@ it('supports groupby as a standalone collection operator', function (): void {
     ]))->toBe('[{"role":"admin","key":"admin","group":"admin","items":[{"name":"Alice","role":"admin"},{"name":"Cara","role":"admin"}]},{"role":"editor","key":"editor","group":"editor","items":[{"name":"Bob","role":"editor"}]}]');
 });
 
+it('preserves item order within a single group', function (): void {
+    expect(engineWithCollectionJson()->render('{{ items groupby (role) | to_json }}', [
+        'items' => [
+            ['name' => 'Alice', 'role' => 'admin'],
+            ['name' => 'Bob', 'role' => 'admin'],
+            ['name' => 'Cara', 'role' => 'admin'],
+            ['name' => 'Dave', 'role' => 'admin'],
+        ],
+    ]))->toBe('[{"role":"admin","key":"admin","group":"admin","items":[{"name":"Alice","role":"admin"},{"name":"Bob","role":"admin"},{"name":"Cara","role":"admin"},{"name":"Dave","role":"admin"}]}]');
+});
+
 it('streams grouped frames through the group and items fields', function (): void {
     expect(engine()->render('{{ res = items groupby (role) }}{{ res }}{{ group }}:{{ items }}{{ name }},{{ /items }};{{ /res }}', [
         'items' => [

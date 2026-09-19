@@ -8,6 +8,7 @@ use ArrayAccess;
 use Bugo\Antlers\Runtime\RuntimeOptions;
 use Bugo\Antlers\Runtime\ValueCoercion;
 use Bugo\Antlers\Runtime\ValueResult;
+use Generator;
 use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\String\UnicodeString;
 
@@ -268,12 +269,7 @@ final class CoreModifiers
             return self::uniqueValues($items);
         });
 
-        $registry->register('flatten', static function (mixed $v): array {
-            $result = [];
-            self::flattenInto($v, $result);
-
-            return $result;
-        });
+        $registry->register('flatten', static fn(mixed $v): array => iterator_to_array(self::flattenLeaves($v), false));
 
         $registry->register('keys', static fn(mixed $v): array => array_keys(self::iterableToArray($v) ?? []));
 
@@ -480,22 +476,18 @@ final class CoreModifiers
      */
     private static function uniqueValues(array $values): array
     {
-        /** @var list<mixed> $result */
-        $result = [];
-        $seen   = [];
+        $seen = [];
 
-        array_walk($values, static function (mixed $value) use (&$result, &$seen): void {
+        return array_values(array_filter($values, static function (mixed $value) use (&$seen): bool {
             $hash = self::uniqueHash($value);
             if (isset($seen[$hash])) {
-                return;
+                return false;
             }
 
             $seen[$hash] = true;
 
-            $result = array_merge($result, [$value]);
-        });
-
-        return $result;
+            return true;
+        }));
     }
 
     private static function uniqueHash(mixed $value): string
@@ -516,20 +508,20 @@ final class CoreModifiers
     }
 
     /**
-     * @param list<mixed> $result
+     * @return Generator<int, mixed>
      */
-    private static function flattenInto(mixed $value, array &$result): void
+    private static function flattenLeaves(mixed $value): Generator
     {
         $items = self::iterableToArray($value);
         if ($items === null) {
-            $result = array_merge($result, [$value]);
+            yield $value;
 
             return;
         }
 
-        array_walk($items, static function (mixed $item) use (&$result): void {
-            self::flattenInto($item, $result);
-        });
+        foreach (array_keys($items) as $key) {
+            yield from self::flattenLeaves($items[$key]);
+        }
     }
 
     private static function dataGet(mixed $value, int|string $key): mixed

@@ -318,9 +318,29 @@ it('applies unique modifier', function (): void {
         ->toBe('[1,2,3]');
 });
 
+it('applies unique modifier to an empty array', function (): void {
+    expect(engineWithJson()->render('{{ items | unique | to_json }}', ['items' => []]))
+        ->toBe('[]');
+});
+
+it('distinguishes values by type in unique modifier', function (): void {
+    expect(engineWithJson()->render('{{ items | unique | to_json }}', ['items' => [1, '1', 1]]))
+        ->toBe('[1,"1"]');
+});
+
 it('applies flatten modifier', function (): void {
     expect(engineWithJson()->render('{{ items | flatten | to_json }}', ['items' => [1, [2, [3, 4]]]]))
         ->toBe('[1,2,3,4]');
+});
+
+it('applies flatten modifier to an empty array', function (): void {
+    expect(engineWithJson()->render('{{ items | flatten | to_json }}', ['items' => []]))
+        ->toBe('[]');
+});
+
+it('preserves leaf order for an asymmetric nesting in flatten modifier', function (): void {
+    expect(engineWithJson()->render('{{ items | flatten | to_json }}', ['items' => [[1, 2], 3, [[4], 5]]]))
+        ->toBe('[1,2,3,4,5]');
 });
 
 it('applies keys modifier', function (): void {

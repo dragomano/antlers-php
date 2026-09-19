@@ -561,24 +561,36 @@ final class ExpressionEvaluator
             return $value;
         }
 
-        /** @var array<string, array{key: mixed, fields: array<string, mixed>, items: list<mixed>}> $groups */
+        $items = array_values($items);
+
+        /** @var array<string, array{key: mixed, fields: array<string, mixed>, indexes: list<int>}> $groups */
         $groups = [];
 
-        array_walk($items, function (mixed $item) use (&$groups, $operator, $scope, $assignmentWriter): void {
-            $groups = $this->reduceGroupedItems($groups, $item, $operator, $scope, $assignmentWriter);
-        });
+        foreach (array_keys($items) as $index) {
+            $groupKey   = $this->buildCollectionGroupKey($operator, $items[$index], $scope, $assignmentWriter);
+            $serialized = serialize($groupKey);
+
+            $groups[$serialized] ??= [
+                'key'     => count($groupKey) === 1 ? reset($groupKey) : $groupKey,
+                'fields'  => $groupKey,
+                'indexes' => [],
+            ];
+
+            $groups[$serialized]['indexes'][] = $index;
+        }
 
         $itemsAlias = $operator->valuesAlias ?? 'items';
 
-        return array_values(array_map(function (array $group) use ($itemsAlias): array {
-            /** @var array<string, mixed> $base */
-            $base = $group['fields'];
-            $base = array_merge($base, ['key' => $group['key'], 'group' => $group['key']]);
+        return array_values(array_map(function (array $group) use ($items, $itemsAlias): array {
+            $groupItems = array_map(static fn(int $index): mixed => $items[$index], $group['indexes']);
 
-            $base[$itemsAlias] = $group['items'];
+            /** @var array<string, mixed> $base */
+            $base = array_merge($group['fields'], ['key' => $group['key'], 'group' => $group['key']]);
+
+            $base[$itemsAlias] = $groupItems;
 
             if ($itemsAlias !== 'items') {
-                $base['items'] = $group['items'];
+                $base['items'] = $groupItems;
             }
 
             return $base;
@@ -667,57 +679,6 @@ final class ExpressionEvaluator
         }
 
         return $groupKey;
-    }
-
-    /**
-     * @param array<string, mixed> $groupKey
-     * @param array{key: mixed, fields: array<string, mixed>, items: list<mixed>}|null $group
-     * @return array{key: mixed, fields: array<string, mixed>, items: list<mixed>}
-     */
-    private function appendGroupedItem(?array $group, array $groupKey, mixed $item): array
-    {
-        $group ??= [
-            'key'    => count($groupKey) === 1 ? reset($groupKey) : $groupKey,
-            'fields' => $groupKey,
-            'items'  => [],
-        ];
-
-        $group['items'] = array_merge($group['items'], [$item]);
-
-        return $group;
-    }
-
-    /**
-     * @param array<string, array{key: mixed, fields: array<string, mixed>, items: list<mixed>}> $groups
-     * @return array{key: mixed, fields: array<string, mixed>, items: list<mixed>}|null
-     */
-    private function existingGroupedItem(array $groups, string $serialized): ?array
-    {
-        return $groups[$serialized] ?? null;
-    }
-
-    /**
-     * @param array<string, array{key: mixed, fields: array<string, mixed>, items: list<mixed>}> $groups
-     * @param array<string, mixed> $scope
-     * @return array<string, array{key: mixed, fields: array<string, mixed>, items: list<mixed>}>
-     */
-    private function reduceGroupedItems(
-        array $groups,
-        mixed $item,
-        CollectionOperatorNode $operator,
-        array $scope,
-        ?callable $assignmentWriter = null,
-    ): array {
-        $groupKey   = $this->buildCollectionGroupKey($operator, $item, $scope, $assignmentWriter);
-        $serialized = serialize($groupKey);
-
-        $groups[$serialized] = $this->appendGroupedItem(
-            $this->existingGroupedItem($groups, $serialized),
-            $groupKey,
-            $item,
-        );
-
-        return $groups;
     }
 
     private function normalizeSortDirection(mixed $value): string
