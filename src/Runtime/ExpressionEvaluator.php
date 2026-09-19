@@ -105,7 +105,7 @@ final class ExpressionEvaluator
             throw new AntlersRuntimeException(sprintf('Undefined variable: "%s"', $path));
         }
 
-        return $this->paths->get($path, $scope);
+        return $this->options->guardPolicy->redact($path, $this->paths->get($path, $scope));
     }
 
     /**
