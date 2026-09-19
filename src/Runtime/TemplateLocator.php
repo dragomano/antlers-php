@@ -180,7 +180,8 @@ final class TemplateLocator
     /** @param list<string> $roots */
     private function absolutePathWithinRoots(string $path, array $roots): ?string
     {
-        $normalized = $this->normalizePath($path);
+        $real       = realpath($path);
+        $normalized = $real !== false ? $real : $this->normalizePath($path);
 
         if ($normalized === null) {
             return null;
