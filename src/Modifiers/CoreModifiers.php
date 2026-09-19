@@ -149,7 +149,7 @@ final class CoreModifiers
             => htmlspecialchars_decode(self::string($v), ENT_QUOTES | ENT_HTML5));
 
         $registry->register('markdown', static fn(mixed $v): string
-            => $options->markdownRenderer->render(self::string($v)));
+            => $options->markdownRenderer()->render(self::string($v)));
 
         $registry->register('wrap', static function (mixed $v, array $p): string {
             $tag = self::string($p[0] ?? 'span');

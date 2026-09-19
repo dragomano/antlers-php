@@ -100,7 +100,7 @@ final class NodeProcessor
 
     public function markdownRenderer(): MarkdownRendererInterface
     {
-        return $this->options->markdownRenderer;
+        return $this->options->markdownRenderer();
     }
 
     public function isDebugEnabled(): bool

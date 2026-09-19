@@ -204,7 +204,7 @@ final class Engine
      */
     public function setMarkdownRenderer(MarkdownRendererInterface $renderer): self
     {
-        $this->runtimeOptions->markdownRenderer = $renderer;
+        $this->runtimeOptions->setMarkdownRenderer($renderer);
 
         return $this;
     }

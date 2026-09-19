@@ -17,12 +17,21 @@ final class RuntimeOptions
 
     public GuardPolicy $guardPolicy;
 
-    public MarkdownRendererInterface $markdownRenderer;
+    private ?MarkdownRendererInterface $markdownRenderer = null;
 
     public function __construct()
     {
-        $this->guardPolicy      = new GuardPolicy();
-        $this->markdownRenderer = new CommonMarkRenderer();
+        $this->guardPolicy = new GuardPolicy();
+    }
+
+    public function markdownRenderer(): MarkdownRendererInterface
+    {
+        return $this->markdownRenderer ??= new CommonMarkRenderer();
+    }
+
+    public function setMarkdownRenderer(MarkdownRendererInterface $renderer): void
+    {
+        $this->markdownRenderer = $renderer;
     }
 
     /**
