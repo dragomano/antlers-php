@@ -109,6 +109,28 @@ it('keeps the subject and reports a failed regex_replace', function (): void {
         ->toThrow(AntlersRuntimeException::class, 'regex_replace failed for pattern "/^(a+)+$/"');
 });
 
+it('validates and caches invalid regex_replace patterns', function (): void {
+    $warnings = [];
+    set_error_handler(static function (int $severity, string $message) use (&$warnings): bool {
+        $warnings[] = $message;
+
+        return true;
+    });
+
+    try {
+        $e = engine();
+
+        expect($e->render('{{ text | regex_replace:"/[/":"x" }}', ['text' => 'value']))
+            ->toBe('value')
+            ->and($e->render('{{ text | regex_replace:"/[/":"x" }}', ['text' => 'value']))
+            ->toBe('value');
+    } finally {
+        restore_error_handler();
+    }
+
+    expect($warnings)->toBe([]);
+});
+
 it('can disable strict mode after enabling it', function (): void {
     $e = strictEngine()->setStrictMode(false);
     expect($e->render('{{ missing }}'))->toBe('');

@@ -17,6 +17,9 @@ use Symfony\Component\String\UnicodeString;
  */
 final class CoreModifiers
 {
+    /** @var array<string, bool|string> */
+    private static array $regexPatternErrors = [];
+
     public static function register(ModifierRegistry $registry, RuntimeOptions $options): void
     {
         StringModifiers::register($registry, $options);
@@ -121,6 +124,26 @@ final class CoreModifiers
             $subject = self::string($v);
             if ($pattern === '') {
                 return $subject;
+            }
+
+            if (! isset(self::$regexPatternErrors[$pattern])) {
+                set_error_handler(static fn(): bool => true);
+
+                try {
+                    preg_match($pattern, '');
+                    self::$regexPatternErrors[$pattern] = preg_last_error() === PREG_NO_ERROR
+                        ? true
+                        : preg_last_error_msg();
+                } finally {
+                    restore_error_handler();
+                }
+            }
+
+            if (is_string(self::$regexPatternErrors[$pattern])) {
+                return $options->fail(
+                    sprintf('regex_replace failed for pattern "%s": %s', $pattern, self::$regexPatternErrors[$pattern]),
+                    $subject,
+                );
             }
 
             $replaced = preg_replace($pattern, self::string($p[1] ?? ''), $subject);
