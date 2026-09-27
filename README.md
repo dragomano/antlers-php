@@ -609,6 +609,40 @@ The line is the innermost `{{ }}` that can be blamed, not the block around it: a
 affected either: an empty result there means debug mode is off, which is a setting rather than
 a failure.
 
+### Object Data
+
+Objects in the data behave like read-only records. What a template can reach depends on the
+member's visibility, and none of it changes the object:
+
+- **Public properties and `__get()`** are always readable — `{{ user.name }}`.
+- **Private and protected members are invisible.** They resolve to `''`, in strict mode too,
+  because a member a template cannot see is a miss, not a failure — never a raw PHP `Error`.
+
+```php
+$user = new User();          // public string $name, private string $token
+
+echo $engine->render('{{ user.name }}', ['user' => $user]);  // Alice
+echo $engine->render('{{ user.token }}', ['user' => $user]); // '' — never an error
+```
+
+Calling a **method** is a separate decision you have to make explicitly. A zero-argument call like
+`{{ invoice.total }}` runs the method `total()`, and that is code execution driven by the template
+— `commit()`, `flush()` and `save()` are reachable the same way — so method calls are off by
+default and turned on with `setAllowObjectMethodCalls(true)`:
+
+```php
+// invoice.total resolves to the method total()
+echo $engine->render('{{ invoice.total }}', ['invoice' => $invoice]); // '' by default
+
+$engine->setAllowObjectMethodCalls(true);
+echo $engine->render('{{ invoice.total }}', ['invoice' => $invoice]); // 42.00
+```
+
+Even with method calls enabled, only **public** methods are called; private and protected methods
+stay invisible, exactly like properties. Anything an object throws goes through the strict/lenient
+policy like any other runtime failure — an `AntlersRuntimeException` in strict mode, never a
+foreign exception escaping `render()`.
+
 ### Debug Mode
 
 The `dump` tag stays silent while debug mode is off, so a stray `{{ dump }}` cannot leak the

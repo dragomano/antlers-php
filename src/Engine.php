@@ -55,7 +55,7 @@ final class Engine
         CoreTags::register($this->tagRegistry);
 
         // Build the runtime pipeline
-        $paths      = new PathDataManager();
+        $paths      = new PathDataManager($this->runtimeOptions);
         $runner     = new ModifierRunner($this->modifierRegistry, $this->runtimeOptions);
         $evaluator  = new ExpressionEvaluator($paths, $runner, $this->runtimeOptions);
         $conditions = new ConditionProcessor($evaluator);
@@ -187,6 +187,18 @@ final class Engine
     public function setDebug(bool $debug): self
     {
         $this->runtimeOptions->debug = $debug;
+
+        return $this;
+    }
+
+    /**
+     * Lets {{ obj.method }} call a public method on an object in the data.
+     * Off by default: a zero-argument call is code execution driven by a
+     * template. Property reads and __get need no opt-in.
+     */
+    public function setAllowObjectMethodCalls(bool $allow): self
+    {
+        $this->runtimeOptions->allowObjectMethodCalls = $allow;
 
         return $this;
     }

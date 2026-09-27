@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Runtime;
 
-use ArrayAccess;
-
 /**
  * Resolves dot-notation paths in data arrays/objects.
  * e.g.: get("user.profile.name", $data) → $data['user']['profile']['name']
  */
-final class PathDataManager
+final readonly class PathDataManager
 {
+    private RuntimeOptions $options;
+
+    public function __construct(?RuntimeOptions $options = null)
+    {
+        $this->options = $options ?? new RuntimeOptions();
+    }
+
     /**
      * Resolve a path string in the given data scope.
      *
@@ -20,7 +25,9 @@ final class PathDataManager
      *   - Array subscript: "items[0]"         → $data['items'][0]
      *   - Key subscript:   "items[key]"       → $data['items'][$data['key']]
      *   - Literal key:     "items['key']"     → $data['items']['key']
-     *   - Object access:   "obj.method"       → $obj->method or $obj->method()
+     *   - Object access:   "obj.name"         → public $obj->name or __get(), or
+     *                                              $obj->name() when
+     *                                              RuntimeOptions::$allowObjectMethodCalls
      *
      * @param array<string, mixed> $scope
      */
@@ -72,20 +79,7 @@ final class PathDataManager
      */
     private function keyExists(mixed $container, int|string $key): bool
     {
-        if (is_array($container)) {
-            return array_key_exists($key, $container);
-        }
-
-        if (is_object($container)) {
-            $property = (string) $key;
-
-            return property_exists($container, $property)
-                || method_exists($container, $property)
-                || method_exists($container, '__get')
-                || ($container instanceof ArrayAccess && $container->offsetExists($key));
-        }
-
-        return false;
+        return ObjectAccess::has($container, $key, $this->options);
     }
 
     /**
@@ -93,35 +87,7 @@ final class PathDataManager
      */
     private function access(mixed $container, int|string $key): mixed
     {
-        if (is_array($container)) {
-            return $container[$key] ?? null;
-        }
-
-        if (is_object($container)) {
-            $property = (string) $key;
-
-            // Public property
-            if (property_exists($container, $property)) {
-                return $container->{$key};
-            }
-
-            // Method call (zero arguments)
-            if (method_exists($container, $property)) {
-                return $container->{$key}();
-            }
-
-            // __get magic
-            if (method_exists($container, '__get')) {
-                return $container->{$key};
-            }
-
-            // ArrayAccess
-            if ($container instanceof ArrayAccess) {
-                return $container[$key] ?? null;
-            }
-        }
-
-        return null;
+        return ObjectAccess::read($container, $key, $this->options);
     }
 
     private function accessValue(mixed $container, int|string $key): ValueResult

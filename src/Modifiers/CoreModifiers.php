@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Modifiers;
 
-use ArrayAccess;
+use Bugo\Antlers\Runtime\ObjectAccess;
 use Bugo\Antlers\Runtime\RuntimeOptions;
 use Bugo\Antlers\Runtime\ValueCoercion;
 use Bugo\Antlers\Runtime\ValueResult;
@@ -219,7 +219,7 @@ final class CoreModifiers
         $registry->register('round', static fn(mixed $v, array $p): float
             => round(self::float($v), self::int($p[0] ?? 0)));
 
-        $registry->register('sort', static function (mixed $v, array $p): mixed {
+        $registry->register('sort', static function (mixed $v, array $p) use ($options): mixed {
             $items = self::iterableToArray($v);
             if ($items === null) {
                 return $v;
@@ -233,7 +233,7 @@ final class CoreModifiers
 
             if ($key !== null) {
                 uasort($items, static fn(mixed $a, mixed $b): int
-                    => $direction * ValueCoercion::compare(self::dataGet($a, $key), self::dataGet($b, $key)));
+                    => $direction * ValueCoercion::compare(self::dataGet($a, $key, $options), self::dataGet($b, $key, $options)));
             }
 
             if ($key === null) {
@@ -269,7 +269,7 @@ final class CoreModifiers
             return $v;
         });
 
-        $registry->register('pluck', static function (mixed $v, array $p): mixed {
+        $registry->register('pluck', static function (mixed $v, array $p) use ($options): mixed {
             $items = self::iterableToArray($v);
             if ($items === null || $p === []) {
                 return $v;
@@ -278,7 +278,7 @@ final class CoreModifiers
             $key = self::parameterKey($p);
 
             return array_map(
-                static fn(mixed $item): mixed => self::dataGet($item, $key),
+                static fn(mixed $item): mixed => self::dataGet($item, $key, $options),
                 $items,
             );
         });
@@ -298,7 +298,7 @@ final class CoreModifiers
 
         $registry->register('values', static fn(mixed $v): array => array_values(self::iterableToArray($v) ?? []));
 
-        $registry->register('where', static function (mixed $v, array $p): mixed {
+        $registry->register('where', static function (mixed $v, array $p) use ($options): mixed {
             $items = self::iterableToArray($v);
             if ($items === null || count($p) < 2) {
                 return $v;
@@ -309,7 +309,7 @@ final class CoreModifiers
 
             return array_values(array_filter(
                 $items,
-                static fn(mixed $item): bool => self::dataGet($item, $key) == $value->value,
+                static fn(mixed $item): bool => self::dataGet($item, $key, $options) == $value->value,
             ));
         });
 
@@ -549,32 +549,8 @@ final class CoreModifiers
         }
     }
 
-    private static function dataGet(mixed $value, int|string $key): mixed
+    private static function dataGet(mixed $value, int|string $key, RuntimeOptions $options): mixed
     {
-        if (is_array($value)) {
-            return $value[$key] ?? null;
-        }
-
-        if (is_object($value)) {
-            $property = (string) $key;
-
-            if (property_exists($value, $property)) {
-                return $value->{$property};
-            }
-
-            if (method_exists($value, $property)) {
-                return $value->{$property}();
-            }
-
-            if (method_exists($value, '__get')) {
-                return $value->{$property};
-            }
-
-            if ($value instanceof ArrayAccess && $value->offsetExists($key)) {
-                return $value[$key];
-            }
-        }
-
-        return null;
+        return ObjectAccess::read($value, $key, $options);
     }
 }

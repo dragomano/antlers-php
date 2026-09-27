@@ -15,6 +15,13 @@ final class RuntimeOptions
 
     public bool $debug = false;
 
+    /**
+     * Whether {{ obj.method }} may call a public method. Off by default, because
+     * a zero-argument call is code execution driven by a template: commit(),
+     * flush() and save() are all reachable that way.
+     */
+    public bool $allowObjectMethodCalls = false;
+
     public GuardPolicy $guardPolicy;
 
     private ?MarkdownRendererInterface $markdownRenderer = null;

@@ -7,10 +7,10 @@ use Bugo\Antlers\Modifiers\ModifierInterface;
 use Bugo\Antlers\Modifiers\ModifierRegistry;
 use Bugo\Antlers\Runtime\RuntimeOptions;
 
-function coreModifierRegistry(): ModifierRegistry
+function coreModifierRegistry(?RuntimeOptions $options = null): ModifierRegistry
 {
     $registry = new ModifierRegistry();
-    CoreModifiers::register($registry, new RuntimeOptions());
+    CoreModifiers::register($registry, $options ?? new RuntimeOptions());
 
     return $registry;
 }
@@ -152,6 +152,12 @@ it('returns null for empty first and the last item for single-item access', func
 it('supports numeric parameter keys and object-aware pluck lookups', function (): void {
     $registry = coreModifierRegistry();
 
+    // pluck/where/sort share ObjectAccess, so the opt-in applies here too.
+    $options = new RuntimeOptions();
+    $options->allowObjectMethodCalls = true;
+
+    $withMethodCalls = coreModifierRegistry($options);
+
     $propertyObject = new class {
         public string $name = 'Alice';
     };
@@ -170,15 +176,27 @@ it('supports numeric parameter keys and object-aware pluck lookups', function ()
         }
     };
 
+    $privateObject = new class {
+        private string $name = 'Hidden';
+
+        public function reveal(): string
+        {
+            return $this->name;
+        }
+    };
+
     $missingObject = new class {};
     $arrayAccess   = new ArrayObject(['name' => 'Diana']);
 
     expect($registry->apply('pluck', [[10, 'Alice'], [20, 'Bob']], [0], []))->toBe([10, 20])
         ->and($registry->apply('pluck', [$propertyObject], ['name'], []))->toBe(['Alice'])
-        ->and($registry->apply('pluck', [$methodObject], ['name'], []))->toBe(['Bob'])
+        ->and($registry->apply('pluck', [$methodObject], ['name'], []))->toBe([null])
+        ->and($withMethodCalls->apply('pluck', [$methodObject], ['name'], []))->toBe(['Bob'])
         ->and($registry->apply('pluck', [$getterObject], ['name'], []))->toBe(['Carol'])
         ->and($registry->apply('pluck', [$arrayAccess], ['name'], []))->toBe(['Diana'])
-        ->and($registry->apply('pluck', [$missingObject], ['name'], []))->toBe([null]);
+        ->and($registry->apply('pluck', [$missingObject], ['name'], []))->toBe([null])
+        ->and($registry->apply('pluck', [$privateObject], ['name'], []))->toBe([null])
+        ->and($withMethodCalls->apply('pluck', [$privateObject], ['reveal'], []))->toBe(['Hidden']);
 });
 
 it('keeps unique object instances by identity', function (): void {
