@@ -385,30 +385,7 @@ final class LanguageParser
 
                 // Read value
                 if ($pos < $length && ($raw[$pos] === '"' || $raw[$pos] === "'")) {
-                    $quote = $raw[$pos++];
-                    $val   = '';
-
-                    // Read string with escape sequence processing (same as Lexer)
-                    while ($pos < $length && $raw[$pos] !== $quote) {
-                        if ($raw[$pos] === '\\' && $pos + 1 < $length) {
-                            $next = $raw[$pos + 1];
-                            $val .= match ($next) {
-                                'n'     => "\n",
-                                't'     => "\t",
-                                'r'     => "\r",
-                                '\\'    => '\\',
-                                '"'     => '"',
-                                "'"     => "'",
-                                '0'     => "\0",
-                                default => '\\' . $next,
-                            };
-                            $pos += 2;
-                        } else {
-                            $val .= $raw[$pos++];
-                        }
-                    }
-
-                    $pos++; // skip closing quote
+                    [$val, $pos] = Lexer::readQuotedString($raw, $pos);
 
                     $params[$key] = $isDynamic ? $this->parseDynamicParameterValue($val) : $this->makeStringNode($val);
                 } else {

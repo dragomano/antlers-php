@@ -64,7 +64,7 @@ final class Lexer
 
             // Strings
             if ($ch === '"' || $ch === "'") {
-                $this->readString($ch);
+                $this->readString();
 
                 continue;
             }
@@ -193,7 +193,8 @@ final class Lexer
 
             if ($ch === '{') {
                 $start = $this->pos;
-                $end = BraceScanner::closingBrace($this->input, $start);
+                $end   = BraceScanner::closingBrace($this->input, $start);
+
                 if ($end === null) {
                     throw new AntlersSyntaxException('Unclosed tag sub-expression "{"', $this->lineAt($start), $this->input);
                 }
@@ -241,6 +242,54 @@ final class Lexer
         return $this->tokens;
     }
 
+    /**
+     * Reads a quoted string starting at the opening quote, decoding the escape
+     * sequences shared by expression strings and tag parameters.
+     *
+     * @return array{string, int, bool} decoded value, offset past the closing quote, whether the quote was closed
+     */
+    public static function readQuotedString(string $input, int $start): array
+    {
+        $quote  = $input[$start];
+        $pos    = $start + 1;
+        $length = strlen($input);
+        $value  = '';
+        $closed = false;
+
+        while ($pos < $length && $input[$pos] !== $quote) {
+            if ($input[$pos] === '\\' && $pos + 1 < $length) {
+                $next = $input[$pos + 1];
+
+                $value .= match ($next) {
+                    'n'     => "\n",
+                    't'     => "\t",
+                    'r'     => "\r",
+                    '\\'    => '\\',
+                    '"'     => '"',
+                    "'"     => "'",
+                    '0'     => "\0",
+                    default => '\\' . $next,
+                };
+
+                $pos += 2;
+
+                continue;
+            }
+
+            $value .= $input[$pos];
+
+            $pos++;
+        }
+
+        if ($pos < $length) {
+            $closed = true;
+
+            $pos++;
+        }
+
+        return [$value, $pos, $closed];
+    }
+
     private function skipWhitespace(): void
     {
         while ($this->pos < $this->length && ctype_space($this->input[$this->pos])) {
@@ -280,49 +329,13 @@ final class Lexer
         );
     }
 
-    private function readString(string $quote): void
+    private function readString(): void
     {
         $start = $this->pos;
 
-        $this->pos++; // skip opening quote
+        [$value, $end, $closed] = self::readQuotedString($this->input, $start);
 
-        $value  = '';
-        $closed = false;
-
-        while ($this->pos < $this->length) {
-            $ch = $this->input[$this->pos];
-
-            if ($ch === '\\' && $this->pos + 1 < $this->length) {
-                $next = $this->input[$this->pos + 1];
-
-                $value .= match ($next) {
-                    'n'     => "\n",
-                    't'     => "\t",
-                    'r'     => "\r",
-                    '\\'    => '\\',
-                    '"'     => '"',
-                    "'"     => "'",
-                    '0'     => "\0",
-                    default => '\\' . $next,
-                };
-
-                $this->pos += 2;
-
-                continue;
-            }
-
-            if ($ch === $quote) {
-                $this->pos++;
-
-                $closed = true;
-
-                break;
-            }
-
-            $value .= $ch;
-
-            $this->pos++;
-        }
+        $this->pos = $end;
 
         if (! $closed) {
             throw new AntlersSyntaxException(
