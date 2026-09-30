@@ -1023,7 +1023,7 @@ final class LanguageParser
             while ($this->peek()->is(TokenType::Colon)) {
                 $this->advance(); // consume :
 
-                $params[] = $this->parsePrimary();
+                $params[] = $this->parseModifierParameter();
             }
 
             if ($this->peek()->is(TokenType::LParen)) {
@@ -1034,6 +1034,28 @@ final class LanguageParser
         }
 
         return new ModifierChainNode($value, $modifiers);
+    }
+
+    // A `:` parameter is a literal, not an expression: `| pluck:name` is the string "name", so a
+    // data variable of that name cannot silently decide what the modifier does. `$name` is the
+    // explicit way to pass a value in.
+    private function parseModifierParameter(): AbstractNode
+    {
+        $token = $this->peek();
+
+        if ($token->is(TokenType::Identifier)) {
+            return $this->makeStringNode($this->advance()->value);
+        }
+
+        // `$name` keeps the dot/subscript path grammar; a following `:` opens the
+        // next parameter here instead of continuing the path like `$a:$b` does.
+        if ($token->is(TokenType::Dollar)) {
+            $this->advance(); // consume $
+
+            return $this->parseVariablePath();
+        }
+
+        return $this->parsePrimary();
     }
 
     private function isCollectionOperator(Token $token): bool

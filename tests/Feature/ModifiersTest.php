@@ -488,7 +488,7 @@ it('supports modifier arguments in parenthesis form', function (): void {
 });
 
 it('supports variables as modifier arguments', function (): void {
-    expect(engine()->render('{{ name | truncate:limit:suffix }}', [
+    expect(engine()->render('{{ name | truncate:$limit:$suffix }}', [
         'name'   => 'hello',
         'limit'  => 3,
         'suffix' => '!',
@@ -496,7 +496,7 @@ it('supports variables as modifier arguments', function (): void {
 });
 
 it('supports expressions as modifier arguments', function (): void {
-    expect(engine()->render('{{ name | truncate:(limit + 1):suffix }}', [
+    expect(engine()->render('{{ name | truncate:(limit + 1):$suffix }}', [
         'name'   => 'hello',
         'limit'  => 2,
         'suffix' => '!',

@@ -13,6 +13,7 @@ use Bugo\Antlers\Nodes\GatekeeperNode;
 use Bugo\Antlers\Nodes\LoopNode;
 use Bugo\Antlers\Nodes\ModifierChainNode;
 use Bugo\Antlers\Nodes\NullCoalesceNode;
+use Bugo\Antlers\Nodes\NumberNode;
 use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\SetNode;
 use Bugo\Antlers\Nodes\StringValueNode;
@@ -244,6 +245,19 @@ describe('LanguageParser', function (): void {
             ->and($wrapped->modifiers[0]->params)->toHaveCount(2)
             ->and(fn() => $this->languageParser->parseExpression('title | wrap('))
             ->toThrow(AntlersSyntaxException::class, 'Unterminated parenthesized expression');
+    });
+
+    it('parses a modifier parameter after a colon as a literal unless it is written with a dollar sign', function (): void {
+        $parsed = $this->languageParser->parseExpression('rows | pluck:name:2:$field');
+
+        expect($parsed)->toBeInstanceOf(ModifierChainNode::class)
+            ->and($parsed->modifiers[0]->name)->toBe('pluck')
+            ->and($parsed->modifiers[0]->params[0])->toBeInstanceOf(StringValueNode::class)
+            ->and($parsed->modifiers[0]->params[0]->value)->toBe('name')
+            ->and($parsed->modifiers[0]->params[1])->toBeInstanceOf(NumberNode::class)
+            ->and($parsed->modifiers[0]->params[1]->value)->toBe(2)
+            ->and($parsed->modifiers[0]->params[2])->toBeInstanceOf(VariableNode::class)
+            ->and($parsed->modifiers[0]->params[2]->path)->toBe('field');
     });
 
     it('parses interpolated strings', function (): void {

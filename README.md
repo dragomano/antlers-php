@@ -217,7 +217,15 @@ because loop metadata wins over an item field.
 {{ price | multiply:1.2 | round:2 }}
 {{ items | sort | first }}
 {{ date | format:"d.m.Y" }}
+{{ rows | pluck:title }}
+{{ title | truncate:$limit }}
 ```
+
+A parameter after `:` is a literal, never a variable lookup: `{{ rows | pluck:title }}` passes the
+string `title`, so what you write is what runs. Pass a value with `$` (`| truncate:$limit`, also
+`$user.name` and `$sizes[0]`), quote anything that is not a single word (`| format:"Y-m-d"`), or use
+parentheses for full expressions, where a bare word *is* a variable
+(`{{ text | replace("worst", $new) }}`).
 
 ### Setting Variables
 

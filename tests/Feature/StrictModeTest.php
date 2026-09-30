@@ -51,7 +51,7 @@ it('throws when modifier is applied to undefined variable in strict mode', funct
 });
 
 it('throws when a modifier argument references an undefined variable in strict mode', function (): void {
-    expect(fn(): string => strictEngine()->render('{{ name | truncate:limit }}', ['name' => 'Alice']))
+    expect(fn(): string => strictEngine()->render('{{ name | truncate:$limit }}', ['name' => 'Alice']))
         ->toThrow(AntlersRuntimeException::class, 'Undefined variable: "limit"');
 });
 
