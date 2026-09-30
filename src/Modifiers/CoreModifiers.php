@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Bugo\Antlers\Modifiers;
 
 use Bugo\Antlers\Runtime\ObjectAccess;
+use Bugo\Antlers\Runtime\PathDataManager;
 use Bugo\Antlers\Runtime\RuntimeOptions;
 use Bugo\Antlers\Runtime\ValueCoercion;
 use Bugo\Antlers\Runtime\ValueResult;
+use DateTimeImmutable;
+use DateTimeInterface;
 use Generator;
 use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\String\UnicodeString;
@@ -387,6 +390,189 @@ final class CoreModifiers
                 default => self::unicode($v)->padEnd($len, $char)->toString(),
             };
         });
+
+        $registry->register('contains_all', static fn(mixed $v, array $p): bool
+            => self::containsNeedles(self::string($v), self::needles($p), true));
+
+        $registry->register('contains_any', static fn(mixed $v, array $p): bool
+            => self::containsNeedles(self::string($v), self::needles($p), false));
+
+        $registry->register('ensure_left', static fn(mixed $v, array $p): string
+            => self::unicode($v)->ensureStart(self::string($p[0] ?? ''))->toString());
+
+        $registry->register('ensure_right', static fn(mixed $v, array $p): string
+            => self::unicode($v)->ensureEnd(self::string($p[0] ?? ''))->toString());
+
+        $registry->register('remove_left', static fn(mixed $v, array $p): string
+            => self::unicode($v)->trimPrefix(self::string($p[0] ?? ''))->toString());
+
+        $registry->register('remove_right', static fn(mixed $v, array $p): string
+            => self::unicode($v)->trimSuffix(self::string($p[0] ?? ''))->toString());
+
+        $registry->register('substr', static fn(mixed $v, array $p): string
+            => self::unicode($v)->slice(self::int($p[0] ?? 0), isset($p[1]) ? self::int($p[1]) : null)->toString());
+
+        $registry->register('sum', static function (mixed $v, array $p) use ($options): int|float {
+            $items = self::iterableToArray($v) ?? [$v];
+            $key   = isset($p[0]) ? self::parameterKey($p) : null;
+
+            $sum = array_reduce(
+                $items,
+                static fn(int|float $carry, mixed $item): int|float => ValueCoercion::add(
+                    $carry,
+                    ValueCoercion::toNumber($key === null ? $item : self::dataGet($item, $key, $options)),
+                ),
+                0,
+            );
+
+            return is_float($sum) && $sum === round($sum) ? (int) $sum : $sum;
+        });
+
+        $registry->register('filter_empty', static function (mixed $v): mixed {
+            $items = self::iterableToArray($v);
+
+            return $items === null ? $v : array_filter($items);
+        });
+
+        $registry->register('compact', static function (mixed $v, array $p, array $context) use ($options): array {
+            /** @var array<string, mixed> $context */
+            $paths = new PathDataManager($options);
+            $paths = new PathDataManager($options);
+
+            return array_map(
+                static fn(string $name): mixed => $paths->get(trim($name), $context),
+                explode(',', self::string($v)),
+            );
+        });
+
+        $registry->register('offset', static function (mixed $v, array $p): mixed {
+            $items = self::iterableToArray($v);
+
+            return $items === null ? $v : array_values(array_slice($items, self::int($p[0] ?? 0)));
+        });
+
+        $registry->register('shuffle', static function (mixed $v): array|string {
+            $items = self::iterableToArray($v);
+            if ($items !== null) {
+                shuffle($items);
+
+                return $items;
+            }
+
+            $chars = preg_split('//u', self::string($v), -1, PREG_SPLIT_NO_EMPTY);
+            if ($chars === false) {
+                return self::string($v);
+            }
+
+            shuffle($chars);
+
+            return implode('', $chars);
+        });
+
+        $registry->register('random', static function (mixed $v): mixed {
+            $items = self::iterableToArray($v);
+            if ($items === null) {
+                return $v;
+            }
+
+            return $items === [] ? null : $items[array_rand($items)];
+        });
+
+        $registry->register('ascii', static fn(mixed $v): string => self::unicode($v)->ascii()->toString());
+
+        $registry->register('camelize', static fn(mixed $v): string => self::unicode($v)->camel()->toString());
+
+        $registry->register('dashify', static fn(mixed $v): string => self::unicode($v)->kebab()->toString());
+
+        $registry->register('deslugify', static fn(mixed $v): string
+            => trim(str_replace(['-', '_'], ' ', self::string($v)), ' '));
+
+        $registry->register('headline', static fn(mixed $v, array $p): string
+            => self::headline(self::string($v), self::string($p[0] ?? 'ap') === 'mla'));
+
+        $registry->register('excerpt', static function (mixed $v, array $p): mixed {
+            $items = self::iterableToArray($v);
+            if ($items !== null) {
+                return $items;
+            }
+
+            $before = strstr(self::string($v), self::string($p[0] ?? '<!--more-->'), true);
+
+            return $before === false ? '' : $before;
+        });
+
+        $registry->register('to_json', static function (mixed $v, array $p): string {
+            $encoded = json_encode($v, self::string($p[0] ?? '') === 'pretty' ? JSON_PRETTY_PRINT : 0);
+
+            return $encoded === false ? '' : $encoded;
+        });
+
+        $registry->register('to_qs', static function (mixed $v): mixed {
+            $items = self::iterableToArray($v);
+
+            return $items === null ? $v : http_build_query($items, '', '&', PHP_QUERY_RFC3986);
+        });
+
+        $registry->register('parse_url', static function (mixed $v, array $p): mixed {
+            $components = [
+                'scheme'   => PHP_URL_SCHEME,
+                'host'     => PHP_URL_HOST,
+                'port'     => PHP_URL_PORT,
+                'user'     => PHP_URL_USER,
+                'pass'     => PHP_URL_PASS,
+                'path'     => PHP_URL_PATH,
+                'query'    => PHP_URL_QUERY,
+                'fragment' => PHP_URL_FRAGMENT,
+            ];
+
+            $key = isset($p[0]) ? strtolower(self::string($p[0])) : null;
+
+            if ($key === null) {
+                // An unparseable URL yields false, which must not display as the word "false".
+                $parts = parse_url(self::string($v));
+
+                return $parts === false ? [] : $parts;
+            }
+
+            return isset($components[$key]) ? parse_url(self::string($v), $components[$key]) : $v;
+        });
+
+        $registry->register('pathinfo', static function (mixed $v, array $p): mixed {
+            $components = [
+                'dirname'   => PATHINFO_DIRNAME,
+                'basename'  => PATHINFO_BASENAME,
+                'extension' => PATHINFO_EXTENSION,
+                'filename'  => PATHINFO_FILENAME,
+            ];
+
+            $key = isset($p[0]) ? strtolower(self::string($p[0])) : null;
+
+            if ($key === null) {
+                return pathinfo(self::string($v));
+            }
+
+            return isset($components[$key]) ? pathinfo(self::string($v), $components[$key]) : $v;
+        });
+
+        $registry->register('rawurlencode', static fn(mixed $v): string
+            => implode('/', array_map(rawurlencode(...), explode('/', self::string($v)))));
+
+        $registry->register('urlencode', static fn(mixed $v): string
+            => implode('/', array_map(urlencode(...), explode('/', self::string($v)))));
+
+        $registry->register('urldecode', static fn(mixed $v): string => urldecode(self::string($v)));
+
+        $registry->register('timestamp', static function (mixed $v): mixed {
+            $date = self::dateValue($v);
+
+            return $date?->getTimestamp() ?? $v;
+        });
+
+        $registry->register('ago', static function (mixed $v): mixed {
+            $date = self::dateValue($v);
+
+            return $date instanceof DateTimeInterface ? self::diffForHumans(new DateTimeImmutable('now'), $date) : $v;
+        });
     }
 
     private static function unicode(mixed $value): UnicodeString
@@ -552,5 +738,126 @@ final class CoreModifiers
     private static function dataGet(mixed $value, int|string $key, RuntimeOptions $options): mixed
     {
         return ObjectAccess::read($value, $key, $options);
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $params
+     * @return list<string>
+     */
+    private static function needles(array $params): array
+    {
+        $needles = [];
+
+        array_walk_recursive($params, static function (mixed $needle) use (&$needles): void {
+            $needles[] = self::string($needle);
+        });
+
+        return $needles;
+    }
+
+    /**
+     * @param  list<string>  $needles
+     */
+    private static function containsNeedles(string $haystack, array $needles, bool $all): bool
+    {
+        foreach ($needles as $needle) {
+            $found = mb_stripos($haystack, $needle) !== false;
+
+            if ($all) {
+                if (! $found) {
+                    return false;
+                }
+            } elseif ($found) {
+                return true;
+            }
+        }
+
+        return $all;
+    }
+
+    private static function headline(string $value, bool $mla): string
+    {
+        $exceptions = [
+            'a',
+            'an',
+            'and',
+            'as',
+            'at',
+            'but',
+            'by',
+            'for',
+            'if',
+            'in',
+            'is',
+            'nor',
+            'of',
+            'on',
+            'or',
+            'per',
+            'the',
+            'to',
+            'vs',
+            'with',
+        ];
+
+        $words = explode(' ', $value);
+        $last  = count($words) - 1;
+
+        foreach ($words as $index => $word) {
+            $word        = mb_strtolower($word);
+            $firstOrLast = $index === 0 || $index === $last;
+
+            $words[$index] = ! $mla && str_contains($word, '-')
+                ? implode('-', array_map(
+                    static fn(string $subWord): string => $firstOrLast || ! in_array($subWord, $exceptions, true)
+                        ? self::ucfirst($subWord)
+                        : $subWord,
+                    explode('-', $word),
+                ))
+                : ($firstOrLast || ! in_array($word, $exceptions, true) ? self::ucfirst($word) : $word);
+        }
+
+        return implode(' ', $words);
+    }
+
+    private static function dateValue(mixed $value): ?DateTimeInterface
+    {
+        if ($value instanceof DateTimeInterface) {
+            return $value;
+        }
+
+        if (is_int($value)) {
+            return new DateTimeImmutable('@' . $value);
+        }
+
+        $stringValue = self::string($value);
+
+        if (is_numeric($stringValue)) {
+            return new DateTimeImmutable('@' . (int) $stringValue);
+        }
+
+        $timestamp = strtotime($stringValue);
+
+        return $timestamp === false ? null : new DateTimeImmutable('@' . $timestamp);
+    }
+
+    private static function diffForHumans(DateTimeInterface $now, DateTimeInterface $then): string
+    {
+        $interval = $now->diff($then);
+
+        [$amount, $unit] = match (true) {
+            $interval->y > 0 => [$interval->y, 'year'],
+            $interval->m > 0 => [$interval->m, 'month'],
+            $interval->d > 0 => [$interval->d, 'day'],
+            $interval->h > 0 => [$interval->h, 'hour'],
+            $interval->i > 0 => [$interval->i, 'minute'],
+            default          => [max($interval->s, 1), 'second'],
+        };
+
+        $unit = $amount === 1 ? $unit : $unit . 's';
+
+        return $then->getTimestamp() <= $now->getTimestamp()
+            ? sprintf('%d %s ago', $amount, $unit)
+            : sprintf('in %d %s', $amount, $unit);
     }
 }

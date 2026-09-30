@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 /*
- * The scope model is fixed by spec.md §11: the root render, every loop
- * iteration, every partial and every section body own a frame; conditions and
- * truthy blocks do not. An assignment writes into the innermost frame, so where
- * frames are opened decides what survives a block.
+ * The scope model: the root render, every loop iteration, every partial and
+ * every section body own a frame; conditions and truthy blocks do not. An
+ * assignment writes into the innermost frame, so where frames are opened
+ * decides what survives a block.
  */
 
 it('keeps an assignment made inside a condition body', function (string $template): void {

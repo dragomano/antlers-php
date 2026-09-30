@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bugo\Antlers;
 
 use Bugo\Antlers\Modifiers\CoreModifiers;
+use Bugo\Antlers\Modifiers\DateModifiers;
 use Bugo\Antlers\Modifiers\ModifierInterface;
 use Bugo\Antlers\Modifiers\ModifierRegistry;
 use Bugo\Antlers\Parser\DocumentParser;
@@ -205,6 +206,20 @@ final class Engine
     public function setAllowObjectMethodCalls(bool $allow): self
     {
         $this->runtimeOptions->allowObjectMethodCalls = $allow;
+
+        return $this;
+    }
+
+    /**
+     * Registers the opt-in date/time modifiers (`timestamp`, `ago`). They stay out of
+     * the default core so relative-time output is an explicit choice; both run on
+     * PHP's own DateTimeImmutable APIs.
+     */
+    public function setDateModifiers(bool $enable = true): self
+    {
+        if ($enable) {
+            DateModifiers::register($this->modifierRegistry, $this->runtimeOptions);
+        }
 
         return $this;
     }

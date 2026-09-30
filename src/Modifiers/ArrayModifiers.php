@@ -8,7 +8,29 @@ use Bugo\Antlers\Runtime\RuntimeOptions;
 
 final class ArrayModifiers
 {
-    public const NAMES = ['reverse', 'length', 'count', 'sort', 'first', 'last', 'pluck', 'unique', 'flatten', 'keys', 'values', 'where', 'chunk', 'join', 'explode'];
+    public const NAMES = [
+        'reverse',
+        'length',
+        'count',
+        'sort',
+        'first',
+        'last',
+        'pluck',
+        'unique',
+        'flatten',
+        'keys',
+        'values',
+        'where',
+        'chunk',
+        'join',
+        'explode',
+        'sum',
+        'filter_empty',
+        'compact',
+        'offset',
+        'shuffle',
+        'random',
+    ];
 
     public static function register(ModifierRegistry $registry, RuntimeOptions $options): void
     {

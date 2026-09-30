@@ -393,9 +393,91 @@ Expected ")" but found end of expression on line 5 in "( 1 + 2"
 
 Этот проект намеренно поддерживает только официальный поднабор модификаторов Statamic, который хорошо работает в автономном PHP-движке без зависимостей от среды выполнения Laravel/Statamic.
 
-| Статус | Модификаторы |
-|--------|--------------|
-| Поддерживаемый официальный поднабор | `add`, `ceil`, `chunk`, `contains`, `count`, `decode`, `divide`, `ends_with`, `entities`, `explode`, `first`, `flatten`, `floor`, `format`, `is_array`, `is_empty`, `is_numeric`, `join`, `kebab`, `keys`, `last`, `lcfirst`, `length`, `limit`, `lower`, `markdown`, `md5`, `mod`, `multiply`, `nl2br`, `pad`, `pluck`, `regex_replace`, `repeat`, `replace`, `reverse`, `round`, `sanitize`, `slugify`, `snake`, `sort`, `starts_with`, `strip_tags`, `studly`, `subtract`, `surround`, `title`, `trim`, `truncate`, `type_of`, `ucfirst`, `unique`, `upper`, `values`, `where`, `word_count`, `wrap` |
+Поддерживаемый официальный поднабор:
+
+- `add`
+- `ascii`
+- `camelize`
+- `ceil`
+- `chunk`
+- `compact`
+- `contains`
+- `contains_all`
+- `contains_any`
+- `count`
+- `dashify`
+- `decode`
+- `deslugify`
+- `divide`
+- `ends_with`
+- `ensure_left`
+- `ensure_right`
+- `entities`
+- `excerpt`
+- `explode`
+- `filter_empty`
+- `first`
+- `flatten`
+- `floor`
+- `format`
+- `headline`
+- `is_array`
+- `is_empty`
+- `is_numeric`
+- `join`
+- `kebab`
+- `keys`
+- `last`
+- `lcfirst`
+- `length`
+- `limit`
+- `lower`
+- `markdown`
+- `md5`
+- `mod`
+- `multiply`
+- `nl2br`
+- `offset`
+- `pad`
+- `parse_url`
+- `pathinfo`
+- `pluck`
+- `random`
+- `rawurlencode`
+- `regex_replace`
+- `remove_left`
+- `remove_right`
+- `repeat`
+- `replace`
+- `reverse`
+- `round`
+- `sanitize`
+- `shuffle`
+- `slugify`
+- `snake`
+- `sort`
+- `starts_with`
+- `strip_tags`
+- `studly`
+- `substr`
+- `subtract`
+- `sum`
+- `surround`
+- `title`
+- `to_json`
+- `to_qs`
+- `trim`
+- `truncate`
+- `type_of`
+- `ucfirst`
+- `unique`
+- `upper`
+- `urldecode`
+- `urlencode`
+- `values`
+- `where`
+- `word_count`
+- `wrap`
 
 ### Спорные модификаторы Statamic
 
@@ -436,6 +518,19 @@ Expected ")" but found end of expression on line 5 in "( 1 + 2"
 | `starts_with` | Начинается с | `{{ text \| starts_with:"Привет" }}` |
 | `ends_with` | Заканчивается на | `{{ text \| ends_with:"!" }}` |
 | `contains` | Содержит подстроку | `{{ text \| contains:"слово" }}` |
+| `contains_all` | Содержит все иглы (без учета регистра) | `{{ text \| contains_all:"один":"два" }}` |
+| `contains_any` | Содержит любую из игл | `{{ text \| contains_any:"один":"два" }}` |
+| `ensure_left` | Добавить префикс, если его нет | `{{ url \| ensure_left:"www." }}` |
+| `ensure_right` | Добавить суффикс, если его нет | `{{ url \| ensure_right:"/" }}` |
+| `remove_left` | Удалить префикс, если он есть | `{{ url \| remove_left:"www." }}` |
+| `remove_right` | Удалить суффикс, если он есть | `{{ file \| remove_right:".php" }}` |
+| `substr` | Мультибайтовая подстрока | `{{ text \| substr:0:3 }}` |
+| `ascii` | Транслитерация в ASCII | `{{ text \| ascii }}` |
+| `camelize` | camelCase | `{{ text \| camelize }}` |
+| `dashify` | Строчные через дефис | `{{ text \| dashify }}` |
+| `deslugify` | Дефисы/подчеркивания → пробелы | `{{ slug \| deslugify }}` |
+| `headline` | Заголовочный регистр с правилами для малых слов (есть параметр `mla`) | `{{ title \| headline }}` |
+| `excerpt` | Оборвать контент по маркеру (`<!--more-->` по умолчанию) | `{{ content \| excerpt }}` |
 | `length` | Длина строки | `{{ text \| length }}` |
 </details>
 
@@ -472,6 +567,12 @@ Expected ")" but found end of expression on line 5 in "( 1 + 2"
 | `count` | Количество элементов | `{{ items \| count }}` |
 | `join` | Объединить в строку | `{{ tags \| join:", " }}` |
 | `explode` | Разбить строку | `{{ csv \| explode:"," }}` |
+| `sum` | Сумма значений, опционально по ключу | `{{ items \| sum:"price" }}` |
+| `filter_empty` | Убрать ложные значения, ключи сохраняются | `{{ items \| filter_empty }}` |
+| `compact` | Список имен переменных через запятую → массив | `{{ list \| compact }}` |
+| `offset` | Срез со смещения, с перенумерацией | `{{ items \| offset:2 }}` |
+| `shuffle` | Случайный порядок (массивы и строки) | `{{ items \| shuffle }}` |
+| `random` | Одно случайное значение | `{{ items \| random }}` |
 </details>
 
 <details>
@@ -488,6 +589,14 @@ Expected ")" but found end of expression on line 5 in "( 1 + 2"
 - Если значение не удается распознать как дату/время, возвращается исходная строка без изменений.
 - Carbon намеренно не входит в зависимости проекта.
 - Carbon-подобные или локале-зависимые модификаторы вроде `iso_format`, `modify_date`, `days_ago`, `is_today` и `timezone` не входят в первое стабильное автономное ядро.
+- Два дополнительных модификатора — `timestamp` и `ago` — доступны как явный opt-in (см. ниже) и работают на стандартных PHP-API `DateTimeImmutable`.
+
+```php
+$engine->setDateModifiers(); // регистрирует `timestamp` и `ago`
+```
+
+- `{{ date | timestamp }}` превращает строку с датой, число-timestamp или значение `DateTimeInterface` в Unix timestamp; неразбираемое значение возвращается без изменений.
+- `{{ date | ago }}` выводит относительное время — `3 days ago`, `in 2 months` — по крупнейшей календарной единице; вывод детерминированный английский, поэтому включайте его, только если это подходит сайту.
 - Если позже появится более богатая поддержка даты и времени, она должна строиться на стандартных PHP-типах `DateTimeImmutable`, `DateTimeInterface` и `DateTimeZone`, предпочтительно как явно подключаемое расширение.
 </details>
 
@@ -501,6 +610,13 @@ Expected ")" but found end of expression on line 5 in "( 1 + 2"
 | `is_numeric` | Проверить, что значение числовое | `{{ value \| is_numeric }}` |
 | `type_of` | Получить тип значения (`string`, `array`, `boolean`, `integer`, `double`) | `{{ value \| type_of }}` |
 | `md5` | MD5-хеш | `{{ email \| md5 }}` |
+| `to_json` | Кодирование в JSON (`pretty` для отступов) | `{{ value \| to_json }}` |
+| `to_qs` | Массив → query string | `{{ value \| to_qs }}` |
+| `parse_url` | Компонент URL или весь массив частей | `{{ url \| parse_url:host }}` |
+| `pathinfo` | Компонент пути или весь массив частей | `{{ path \| pathinfo:extension }}` |
+| `rawurlencode` | Кодирование по RFC 3986, слэши сохраняются | `{{ url \| rawurlencode }}` |
+| `urlencode` | Кодирование URL, слэши сохраняются | `{{ url \| urlencode }}` |
+| `urldecode` | Декодирование URL-строки | `{{ url \| urldecode }}` |
 </details>
 
 ## Расширение

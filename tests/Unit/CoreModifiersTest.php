@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Bugo\Antlers\Modifiers\CoreModifiers;
+use Bugo\Antlers\Modifiers\DateModifiers;
 use Bugo\Antlers\Modifiers\ModifierInterface;
 use Bugo\Antlers\Modifiers\ModifierRegistry;
 use Bugo\Antlers\Runtime\RuntimeOptions;
@@ -88,6 +89,82 @@ it('returns fallback values for non-iterable collection modifiers', function ():
         ->and($registry->apply('chunk', $value, [2], []))->toBe($value)
         ->and($registry->apply('pluck', ['Alice', 'Bob'], [], []))->toBe(['Alice', 'Bob'])
         ->and($registry->apply('where', [['active' => true]], ['active'], []))->toBe([['active' => true]]);
+});
+
+it('registers the desirable modifiers from the spec', function (): void {
+    $registry = coreModifierRegistry();
+
+    $desirableModifiers = [
+        'contains_all',
+        'contains_any',
+        'starts_with',
+        'ends_with',
+        'ensure_left',
+        'ensure_right',
+        'remove_left',
+        'remove_right',
+        'substr',
+        'sum',
+        'filter_empty',
+        'compact',
+        'offset',
+        'shuffle',
+        'random',
+        'ascii',
+        'camelize',
+        'dashify',
+        'deslugify',
+        'headline',
+        'excerpt',
+        'to_json',
+        'to_qs',
+        'parse_url',
+        'pathinfo',
+        'rawurlencode',
+        'urlencode',
+        'urldecode',
+    ];
+
+    foreach ($desirableModifiers as $modifier) {
+        expect($registry->has($modifier))->toBeTrue(sprintf('Modifier [%s] should be registered.', $modifier));
+    }
+});
+
+it('returns fallback values for non-iterable desirable modifiers', function (): void {
+    $registry = coreModifierRegistry();
+    $value    = new stdClass();
+
+    expect($registry->apply('filter_empty', $value, [], []))->toBe($value)
+        ->and($registry->apply('offset', $value, [2], []))->toBe($value)
+        ->and($registry->apply('random', $value, [], []))->toBe($value)
+        ->and($registry->apply('to_qs', $value, [], []))->toBe($value)
+        ->and($registry->apply('sum', $value, [], []))->toBe(0)
+        ->and($registry->apply('sum', null, [], []))->toBe(0)
+        ->and($registry->apply('random', ['x'], [], []))->toBe('x');
+});
+
+it('resolves compact names against the passed scope', function (): void {
+    $registry = coreModifierRegistry();
+
+    expect($registry->apply('compact', ' a , b ', [], ['a' => 1, 'b' => 2]))->toBe([1, 2])
+        ->and($registry->apply('compact', 'a, missing', [], ['a' => 1]))->toBe([1, null]);
+});
+
+it('passes arrays through excerpt and keeps undecodable strings through shuffle', function (): void {
+    $registry = coreModifierRegistry();
+
+    expect($registry->apply('excerpt', ['a', 'b'], [], []))->toBe(['a', 'b'])
+        ->and($registry->apply('shuffle', "\xFF", [], []))->toBe("\xFF");
+});
+
+it('registers the opt-in date modifiers together with the core', function (): void {
+    $registry = new ModifierRegistry();
+
+    DateModifiers::register($registry, new RuntimeOptions());
+
+    expect($registry->has('timestamp'))->toBeTrue()
+        ->and($registry->has('ago'))->toBeTrue()
+        ->and($registry->has('upper'))->toBeTrue();
 });
 
 it('keeps short strings unchanged and handles empty casing inputs', function (): void {

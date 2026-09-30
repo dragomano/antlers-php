@@ -524,3 +524,219 @@ it('allows registering custom modifier', function (): void {
 
     expect($e->render('{{ name | shout }}', ['name' => 'hello']))->toBe('HELLO!!!');
 });
+
+it('applies contains_all modifier case-insensitively', function (): void {
+    expect(engine()->render('{{ text | contains_all:"best":"times" }}', ['text' => 'It was the BEST of times.']))
+        ->toBe('true')
+        ->and(engine()->render('{{ text | contains_all:"best":"worst" }}', ['text' => 'It was the best of times.']))
+        ->toBe('false');
+});
+
+it('applies contains_all modifier with an array of needles', function (): void {
+    expect(engine()->render('{{ text | contains_all:$needles }}', [
+        'text'    => 'one two three',
+        'needles' => ['one', 'three'],
+    ]))->toBe('true');
+});
+
+it('applies contains_any modifier', function (): void {
+    expect(engine()->render('{{ text | contains_any:"nope":"best" }}', ['text' => 'the best of times']))
+        ->toBe('true')
+        ->and(engine()->render('{{ text | contains_any:"nope":"never" }}', ['text' => 'the best of times']))
+        ->toBe('false');
+});
+
+it('applies ensure_left modifier', function (): void {
+    expect(engine()->render('{{ url | ensure_left:"www." }}', ['url' => 'example.com']))
+        ->toBe('www.example.com')
+        ->and(engine()->render('{{ url | ensure_left:"www." }}', ['url' => 'www.example.com']))
+        ->toBe('www.example.com');
+});
+
+it('applies ensure_right modifier', function (): void {
+    expect(engine()->render('{{ url | ensure_right:"/" }}', ['url' => 'example.com']))
+        ->toBe('example.com/')
+        ->and(engine()->render('{{ url | ensure_right:"/" }}', ['url' => 'example.com/']))
+        ->toBe('example.com/');
+});
+
+it('applies remove_left modifier', function (): void {
+    expect(engine()->render('{{ url | remove_left:"www." }}', ['url' => 'www.example.com']))
+        ->toBe('example.com')
+        ->and(engine()->render('{{ url | remove_left:"www." }}', ['url' => 'example.com']))
+        ->toBe('example.com');
+});
+
+it('applies remove_right modifier', function (): void {
+    expect(engine()->render('{{ file | remove_right:".php" }}', ['file' => 'index.php']))
+        ->toBe('index')
+        ->and(engine()->render('{{ file | remove_right:".php" }}', ['file' => 'index.html']))
+        ->toBe('index.html');
+});
+
+it('applies substr modifier', function (): void {
+    expect(engine()->render('{{ text | substr:0:3 }}', ['text' => 'abcdef']))
+        ->toBe('abc')
+        ->and(engine()->render('{{ text | substr:2 }}', ['text' => 'abcdef']))
+        ->toBe('cdef')
+        ->and(engine()->render('{{ text | substr:-3 }}', ['text' => 'abcdef']))
+        ->toBe('def');
+});
+
+it('applies sum modifier', function (): void {
+    expect(engine()->render('{{ items | sum }}', ['items' => [1, 2, 3]]))
+        ->toBe('6')
+        ->and(engine()->render('{{ items | sum }}', ['items' => [1.5, 2.25]]))
+        ->toBe('3.75')
+        ->and(engine()->render('{{ items | sum }}', ['items' => [1.5, 2.5]]))
+        ->toBe('4');
+});
+
+it('applies sum modifier with a key', function (): void {
+    expect(engine()->render('{{ items | sum:price }}', ['items' => [['price' => 10], ['price' => 20.5]]]))
+        ->toBe('30.5');
+});
+
+it('applies filter_empty modifier', function (): void {
+    expect(engineWithJson()->render('{{ items | filter_empty | to_json }}', [
+        'items' => ['a', '', 0, 'b', null, false, 2],
+    ]))->toBe('{"0":"a","3":"b","6":2}');
+});
+
+it('applies compact modifier', function (): void {
+    expect(engineWithJson()->render('{{ list | compact | to_json }}', [
+        'list'  => 'one, title, two',
+        'one'   => 'Value One',
+        'title' => 'The Title',
+        'two'   => 'Value Two',
+    ]))->toBe('["Value One","The Title","Value Two"]');
+});
+
+it('applies compact modifier with nested paths', function (): void {
+    expect(engineWithJson()->render('{{ list | compact | to_json }}', [
+        'list'  => 'stuff:one, title',
+        'title' => 'The Title',
+        'stuff' => ['one' => 'Value One'],
+    ]))->toBe('["Value One","The Title"]');
+});
+
+it('applies offset modifier', function (): void {
+    expect(engineWithJson()->render('{{ items | offset:2 | to_json }}', ['items' => ['a', 'b', 'c', 'd']]))
+        ->toBe('["c","d"]')
+        ->and(engineWithJson()->render('{{ items | offset:-2 | to_json }}', ['items' => ['a', 'b', 'c', 'd']]))
+        ->toBe('["c","d"]');
+});
+
+it('applies shuffle modifier on array', function (): void {
+    $shuffled = engine()->render('{{ items | shuffle | join:"," }}', ['items' => [1, 2, 3, 4]]);
+
+    expect(explode(',', $shuffled))->toEqualCanonicalizing(['1', '2', '3', '4']);
+});
+
+it('applies shuffle modifier on string', function (): void {
+    $shuffled = engine()->render('{{ text | shuffle }}', ['text' => 'abcdef']);
+
+    expect(str_split($shuffled))->toEqualCanonicalizing(['a', 'b', 'c', 'd', 'e', 'f']);
+});
+
+it('applies random modifier', function (): void {
+    expect(['x', 'y', 'z'])->toContain(engine()->render('{{ items | random }}', ['items' => ['x', 'y', 'z']]));
+});
+
+it('applies ascii modifier', function (): void {
+    expect(engine()->render('{{ text | ascii }}', ['text' => 'Précieux ünïcode']))
+        ->toBe('Precieux unicode')
+        ->and(engine()->render('{{ text | ascii }}', ['text' => 'Привет мир']))
+        ->toBe('Privet mir');
+});
+
+it('applies camelize modifier', function (): void {
+    expect(engine()->render('{{ text | camelize }}', ['text' => 'data_rate']))
+        ->toBe('dataRate')
+        ->and(engine()->render('{{ text | camelize }}', ['text' => 'background-color']))
+        ->toBe('backgroundColor');
+});
+
+it('applies dashify modifier', function (): void {
+    expect(engine()->render('{{ text | dashify }}', ['text' => 'Foo Bar fooBar foo_bar']))
+        ->toBe('foo-bar-foo-bar-foo-bar');
+});
+
+it('applies deslugify modifier', function (): void {
+    expect(engine()->render('{{ text | deslugify }}', ['text' => 'my-first_post']))
+        ->toBe('my first post');
+});
+
+it('applies headline modifier in AP style', function (): void {
+    expect(engine()->render('{{ text | headline }}', ['text' => 'the quick brown fox jumps over the lazy dog']))
+        ->toBe('The Quick Brown Fox Jumps Over the Lazy Dog')
+        ->and(engine()->render('{{ text | headline }}', ['text' => 'a well-known state-of-the-art design']))
+        ->toBe('A Well-Known State-of-the-Art Design');
+});
+
+it('applies headline modifier in MLA style', function (): void {
+    expect(engine()->render('{{ text | headline:mla }}', ['text' => 'the quick brown fox']))
+        ->toBe('The Quick Brown Fox')
+        ->and(engine()->render('{{ text | headline:mla }}', ['text' => 'a well-known design']))
+        ->toBe('A Well-known Design');
+});
+
+it('applies excerpt modifier', function (): void {
+    expect(engine()->render('{{ text | excerpt }}', ['text' => 'First part<!--more-->Second part']))
+        ->toBe('First part')
+        ->and(engine()->render('{{ text | excerpt:"###" }}', ['text' => 'First###Second']))
+        ->toBe('First');
+});
+
+it('returns an empty excerpt when the marker is missing', function (): void {
+    expect(engine()->render('{{ text | excerpt }}', ['text' => 'No marker here']))
+        ->toBe('');
+});
+
+it('applies to_json modifier', function (): void {
+    expect(engine()->render('{{ value | to_json }}', ['value' => ['a' => 1, 'b' => [true, null]]]))
+        ->toBe('{"a":1,"b":[true,null]}');
+});
+
+it('applies to_json modifier with pretty printing', function (): void {
+    expect(engine()->render('{{ value | to_json:"pretty" }}', ['value' => ['a' => 1]]))
+        ->toBe("{\n    \"a\": 1\n}");
+});
+
+it('applies to_qs modifier', function (): void {
+    expect(engine()->render('{{ value | to_qs }}', ['value' => ['page' => 2, 'q' => 'hello world']]))
+        ->toBe('page=2&q=hello%20world');
+});
+
+it('applies parse_url modifier', function (): void {
+    expect(engine()->render('{{ url | parse_url:host }}', ['url' => 'https://example.com/path?x=1#frag']))
+        ->toBe('example.com')
+        ->and(engine()->render('{{ url | parse_url:path }}', ['url' => 'https://example.com/path?x=1']))
+        ->toBe('/path')
+        ->and(engineWithJson()->render('{{ url | parse_url | to_json }}', ['url' => 'https://example.com:8080/p']))
+        ->toBe('{"scheme":"https","host":"example.com","port":8080,"path":"/p"}');
+});
+
+it('applies pathinfo modifier', function (): void {
+    expect(engine()->render('{{ path | pathinfo:extension }}', ['path' => '/docs/file.txt']))
+        ->toBe('txt')
+        ->and(engine()->render('{{ path | pathinfo:dirname }}', ['path' => '/docs/file.txt']))
+        ->toBe('/docs')
+        ->and(engineWithJson()->render('{{ path | pathinfo | to_json }}', ['path' => '/docs/file.txt']))
+        ->toBe('{"dirname":"/docs","basename":"file.txt","extension":"txt","filename":"file"}');
+});
+
+it('applies rawurlencode modifier', function (): void {
+    expect(engine()->render('{{ url | rawurlencode }}', ['url' => 'files/my doc+v2.txt']))
+        ->toBe('files/my%20doc%2Bv2.txt');
+});
+
+it('applies urlencode modifier', function (): void {
+    expect(engine()->render('{{ url | urlencode }}', ['url' => 'files/my doc+v2.txt']))
+        ->toBe('files/my+doc%2Bv2.txt');
+});
+
+it('applies urldecode modifier', function (): void {
+    expect(engine()->render('{{ url | urldecode }}', ['url' => 'my%20doc%2Bv2']))
+        ->toBe('my doc+v2');
+});

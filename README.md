@@ -393,9 +393,91 @@ The standalone core currently registers these built-in tags:
 
 This project intentionally supports an official subset of Statamic modifiers that works well in a standalone PHP engine, without Laravel/Statamic runtime dependencies.
 
-| Status | Modifiers |
-|--------|-----------|
-| Supported official subset | `add`, `ceil`, `chunk`, `contains`, `count`, `decode`, `divide`, `ends_with`, `entities`, `explode`, `first`, `flatten`, `floor`, `format`, `is_array`, `is_empty`, `is_numeric`, `join`, `kebab`, `keys`, `last`, `lcfirst`, `length`, `limit`, `lower`, `markdown`, `md5`, `mod`, `multiply`, `nl2br`, `pad`, `pluck`, `regex_replace`, `repeat`, `replace`, `reverse`, `round`, `sanitize`, `slugify`, `snake`, `sort`, `starts_with`, `strip_tags`, `studly`, `subtract`, `surround`, `title`, `trim`, `truncate`, `type_of`, `ucfirst`, `unique`, `upper`, `values`, `where`, `word_count`, `wrap` |
+Supported official subset:
+
+- `add`
+- `ascii`
+- `camelize`
+- `ceil`
+- `chunk`
+- `compact`
+- `contains`
+- `contains_all`
+- `contains_any`
+- `count`
+- `dashify`
+- `decode`
+- `deslugify`
+- `divide`
+- `ends_with`
+- `ensure_left`
+- `ensure_right`
+- `entities`
+- `excerpt`
+- `explode`
+- `filter_empty`
+- `first`
+- `flatten`
+- `floor`
+- `format`
+- `headline`
+- `is_array`
+- `is_empty`
+- `is_numeric`
+- `join`
+- `kebab`
+- `keys`
+- `last`
+- `lcfirst`
+- `length`
+- `limit`
+- `lower`
+- `markdown`
+- `md5`
+- `mod`
+- `multiply`
+- `nl2br`
+- `offset`
+- `pad`
+- `parse_url`
+- `pathinfo`
+- `pluck`
+- `random`
+- `rawurlencode`
+- `regex_replace`
+- `remove_left`
+- `remove_right`
+- `repeat`
+- `replace`
+- `reverse`
+- `round`
+- `sanitize`
+- `shuffle`
+- `slugify`
+- `snake`
+- `sort`
+- `starts_with`
+- `strip_tags`
+- `studly`
+- `substr`
+- `subtract`
+- `sum`
+- `surround`
+- `title`
+- `to_json`
+- `to_qs`
+- `trim`
+- `truncate`
+- `type_of`
+- `ucfirst`
+- `unique`
+- `upper`
+- `urldecode`
+- `urlencode`
+- `values`
+- `where`
+- `word_count`
+- `wrap`
 
 ### Disputed Statamic Modifiers
 
@@ -436,6 +518,19 @@ This project intentionally supports an official subset of Statamic modifiers tha
 | `starts_with` | Starts with | `{{ text \| starts_with:"Hello" }}` |
 | `ends_with` | Ends with | `{{ text \| ends_with:"!" }}` |
 | `contains` | Contains substring | `{{ text \| contains:"word" }}` |
+| `contains_all` | Contains all needles (case-insensitive) | `{{ text \| contains_all:"one":"two" }}` |
+| `contains_any` | Contains any of the needles | `{{ text \| contains_any:"one":"two" }}` |
+| `ensure_left` | Prepend unless already there | `{{ url \| ensure_left:"www." }}` |
+| `ensure_right` | Append unless already there | `{{ url \| ensure_right:"/" }}` |
+| `remove_left` | Remove the prefix if present | `{{ url \| remove_left:"www." }}` |
+| `remove_right` | Remove the suffix if present | `{{ file \| remove_right:".php" }}` |
+| `substr` | Multibyte substring | `{{ text \| substr:0:3 }}` |
+| `ascii` | Transliterate to ASCII | `{{ text \| ascii }}` |
+| `camelize` | camelCase | `{{ text \| camelize }}` |
+| `dashify` | Dash-separated lowercase | `{{ text \| dashify }}` |
+| `deslugify` | Dashes/underscores → spaces | `{{ slug \| deslugify }}` |
+| `headline` | Title case with small-word rules (`mla` param supported) | `{{ title \| headline }}` |
+| `excerpt` | Break content at a marker (`<!--more-->` by default) | `{{ content \| excerpt }}` |
 | `length` | String length | `{{ text \| length }}` |
 </details>
 
@@ -472,6 +567,12 @@ This project intentionally supports an official subset of Statamic modifiers tha
 | `count` | Number of items | `{{ items \| count }}` |
 | `join` | Join into a string | `{{ tags \| join:", " }}` |
 | `explode` | Split a string | `{{ csv \| explode:"," }}` |
+| `sum` | Sum values, optionally by key | `{{ items \| sum:"price" }}` |
+| `filter_empty` | Drop falsy values, keys preserved | `{{ items \| filter_empty }}` |
+| `compact` | Comma-separated variable names → array | `{{ list \| compact }}` |
+| `offset` | Slice from an offset, reindexed | `{{ items \| offset:2 }}` |
+| `shuffle` | Random order (arrays and strings) | `{{ items \| shuffle }}` |
+| `random` | One random value | `{{ items \| random }}` |
 </details>
 
 <details>
@@ -488,6 +589,14 @@ Current standalone strategy:
 - If parsing fails, the original string is returned unchanged.
 - Carbon is intentionally not a dependency of this project.
 - Carbon-style or locale-aware modifiers such as `iso_format`, `modify_date`, `days_ago`, `is_today`, or `timezone` are not part of the first stable standalone core.
+- Two extra date/time modifiers, `timestamp` and `ago`, are available as an explicit opt-in (see below) and run on PHP's own `DateTimeImmutable` APIs.
+
+```php
+$engine->setDateModifiers(); // registers `timestamp` and `ago`
+```
+
+- `{{ date | timestamp }}` converts a date string, a timestamp number, or a `DateTimeInterface` value to a Unix timestamp; unparseable values pass through unchanged.
+- `{{ date | ago }}` renders a relative time — `3 days ago`, `in 2 months` — from the largest calendar unit; the output is deterministic English, so enable it only when that suits your site.
 - If richer date/time support is added later, it should be built on native PHP types such as `DateTimeImmutable`, `DateTimeInterface`, and `DateTimeZone`, preferably as an opt-in extension.
 </details>
 
@@ -501,6 +610,13 @@ Current standalone strategy:
 | `is_numeric` | Check if value is numeric | `{{ value \| is_numeric }}` |
 | `type_of` | Return the native value type | `{{ value \| type_of }}` |
 | `md5` | MD5 hash | `{{ email \| md5 }}` |
+| `to_json` | JSON encode (`pretty` for indentation) | `{{ value \| to_json }}` |
+| `to_qs` | Array → query string | `{{ value \| to_qs }}` |
+| `parse_url` | URL component or the full parts array | `{{ url \| parse_url:host }}` |
+| `pathinfo` | Path component or the full parts array | `{{ path \| pathinfo:extension }}` |
+| `rawurlencode` | RFC 3986 encode, slashes kept | `{{ url \| rawurlencode }}` |
+| `urlencode` | URL encode, slashes kept | `{{ url \| urlencode }}` |
+| `urldecode` | Decode URL-encoded string | `{{ url \| urldecode }}` |
 </details>
 
 ## Extending
