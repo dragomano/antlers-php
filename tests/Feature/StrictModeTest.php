@@ -78,6 +78,10 @@ it('returns the original value for an unknown modifier in lenient mode', functio
     expect(engine()->render('{{ name | missing_modifier }}', ['name' => 'Alice']))->toBe('Alice');
 });
 
+it('continues the modifier chain after an unknown modifier in lenient mode', function (): void {
+    expect(engine()->render('{{ name | missing | upper }}', ['name' => 'Alice']))->toBe('ALICE');
+});
+
 it('throws for an unknown modifier in strict mode', function (): void {
     expect(fn(): string => strictEngine()->render('{{ name | missing_modifier }}', ['name' => 'Alice']))
         ->toThrow(AntlersRuntimeException::class, 'Unknown modifier: "missing_modifier"');
