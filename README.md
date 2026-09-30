@@ -100,6 +100,26 @@ Statamic, where `??` is documented as returning the first value that passes a tr
 Neither operator throws for an undefined left side, even in strict mode — both are an explicit
 "use it if it is there".
 
+### Switch Expression
+
+`switch(...)` maps parenthesized conditions to values and returns the first match; the empty
+parentheses pair is the no-match fallback. Conditions and values are full expressions, so
+modifiers, ternaries and arithmetic work inside:
+
+```antlers
+{{ switch(
+    (size == 'sm') => '35vw',
+    (size == 'lg') => '75vw',
+    () => '100vw'
+) }}
+```
+
+Without the `()` pair a no-match switch renders nothing. The expression is a primary, so it
+composes everywhere an expression does — `{{ x = switch(...) }}`, `{{ switch(...) | upper }}`,
+`{{ if switch(...) == 'big' }}`, and inside tag parameters where tag pairs are not allowed.
+It is distinct from the cycling `{{ switch between="a|b" }}` tag, which returns its next value
+per occurrence.
+
 ### Arithmetic and Strings
 
 ```antlers

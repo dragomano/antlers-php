@@ -21,6 +21,7 @@ use Bugo\Antlers\Nodes\NullNode;
 use Bugo\Antlers\Nodes\NumberNode;
 use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\StringValueNode;
+use Bugo\Antlers\Nodes\SwitchNode;
 use Bugo\Antlers\Nodes\TagSubExpressionNode;
 use Bugo\Antlers\Nodes\TernaryNode;
 use Bugo\Antlers\Nodes\TruthyCoalesceNode;
@@ -64,6 +65,7 @@ final class ExpressionEvaluator
             $node instanceof BinaryOpNode            => $this->evalBinary($node, $scope, $assignmentWriter),
             $node instanceof UnaryOpNode             => $this->evalUnary($node, $scope, $assignmentWriter),
             $node instanceof TernaryNode             => $this->evalTernary($node, $scope, $assignmentWriter),
+            $node instanceof SwitchNode              => $this->evalSwitch($node, $scope, $assignmentWriter),
             $node instanceof GatekeeperNode          => $this->evalGatekeeper($node, $scope, $assignmentWriter),
             $node instanceof NullCoalesceNode        => $this->evalNullCoalesce($node, $scope, $assignmentWriter),
             $node instanceof TruthyCoalesceNode      => $this->evalTruthyCoalesce($node, $scope, $assignmentWriter),
@@ -229,6 +231,25 @@ final class ExpressionEvaluator
         return $this->isTruthy($cond->value)
             ? $this->evaluate($node->trueBranch, $scope, $assignmentWriter)
             : $this->evaluate($node->falseBranch, $scope, $assignmentWriter);
+    }
+
+    /**
+     * switch(...): the first truthy condition wins; the "()" pair is the
+     * no-match fallback, null when it is absent.
+     *
+     * @param array<string, mixed> $scope
+     */
+    private function evalSwitch(SwitchNode $node, array $scope, ?callable $assignmentWriter = null): mixed
+    {
+        foreach ($node->cases as [$condition, $value]) {
+            if ($this->evaluateTruthy($condition, $scope, $assignmentWriter)) {
+                return $this->evaluate($value, $scope, $assignmentWriter);
+            }
+        }
+
+        return $node->default instanceof AbstractNode
+            ? $this->evaluate($node->default, $scope, $assignmentWriter)
+            : null;
     }
 
     /**

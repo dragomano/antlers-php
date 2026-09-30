@@ -27,6 +27,7 @@ use Bugo\Antlers\Nodes\NumberNode;
 use Bugo\Antlers\Nodes\SequenceNode;
 use Bugo\Antlers\Nodes\SetNode;
 use Bugo\Antlers\Nodes\StringValueNode;
+use Bugo\Antlers\Nodes\SwitchNode;
 use Bugo\Antlers\Nodes\TagNode;
 use Bugo\Antlers\Nodes\TagSubExpressionNode;
 use Bugo\Antlers\Nodes\TernaryNode;
@@ -134,6 +135,12 @@ final class LanguageParser
 
         if ($node->children !== [] && str_contains($node->name, ':')) {
             return $this->parseTagNode($node);
+        }
+
+        // switch(...) is the expression form; the tag is {{ switch between="a|b" }} and would
+        // otherwise swallow it, because the registered tag name wins over variables.
+        if ($node->name === 'switch' && $node->children === [] && preg_match('/^switch\s*\(/i', $raw) === 1) {
+            return $this->parseExpression($raw);
         }
 
         if ($this->names->isTag($node->name)) {
@@ -876,6 +883,10 @@ final class LanguageParser
 
         // Identifier — variable path or function call
         if ($token->is(TokenType::Identifier)) {
+            if (strtolower($token->value) === 'switch' && $this->stream->at($this->stream->position() + 1)->is(TokenType::LParen)) {
+                return $this->parseSwitchExpression();
+            }
+
             return $this->parseVariablePath();
         }
 
@@ -975,6 +986,65 @@ final class LanguageParser
         $this->consume(TokenType::RBracket);
 
         return new ArrayNode($items);
+    }
+
+    // switch((condition) => value, ..., () => default): the first truthy condition wins.
+    private function parseSwitchExpression(): SwitchNode
+    {
+        $this->advance(); // consume the switch keyword
+
+        $this->consume(TokenType::LParen);
+
+        $node = new SwitchNode();
+
+        while (! $this->peek()->is(TokenType::RParen, TokenType::Eof)) {
+            if ($this->peek()->is(TokenType::Comma)) {
+                $this->advance();
+
+                continue;
+            }
+
+            if (! $this->peek()->is(TokenType::LParen)) {
+                $this->syntaxError(sprintf(
+                    'Expected "(" around a switch condition but found %s',
+                    $this->describeToken($this->peek()),
+                ));
+            }
+
+            $this->consume(TokenType::LParen);
+
+            if ($this->peek()->is(TokenType::RParen)) {
+                $this->advance();
+                $this->consume(TokenType::Arrow);
+
+                $node->default = $this->parseSwitchValue();
+
+                continue;
+            }
+
+            $condition = $this->parseTernaryExpression();
+
+            $this->consume(TokenType::RParen);
+            $this->consume(TokenType::Arrow);
+
+            $node->cases[] = [$condition, $this->parseSwitchValue()];
+        }
+
+        $this->consume(TokenType::RParen);
+
+        return $node;
+    }
+
+    private function parseSwitchValue(): AbstractNode
+    {
+        if ($this->peek()->is(TokenType::Comma, TokenType::RParen, TokenType::Eof)) {
+            $this->syntaxError(sprintf(
+                'Expected a value after "=>" but found %s',
+                $this->describeToken($this->peek()),
+            ));
+        }
+
+        return $this->parseTernaryExpression();
     }
 
     private function parseExplicitVariablePath(): VariableNode
