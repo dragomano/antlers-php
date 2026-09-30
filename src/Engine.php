@@ -88,6 +88,12 @@ final class Engine
     /**
      * Render a template file with the given data.
      *
+     * A top-level render is the one lookup a caller makes itself, so it may run
+     * without configured view paths: pass an absolute path and its own directory
+     * becomes the template root for that render. With `setViewPaths()` set, the
+     * path is held to them like any other template lookup. A relative path needs
+     * configured view paths to resolve.
+     *
      * @param array<string, mixed> $data
      */
     public function renderFile(string $path, array $data = []): string

@@ -68,7 +68,12 @@ final class ObjectAccess
             }
 
             if ($options->allowObjectMethodCalls && self::isPublicMethod($container, $property)) {
-                return $container->{$key}();
+                // isPublicMethod() has just proven this one callable; neither
+                // analyzer can follow a data-driven method name on its own.
+                /** @var callable $method */
+                $method = [$container, $key];
+
+                return $method();
             }
 
             if (method_exists($container, '__get')) {

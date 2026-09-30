@@ -4,6 +4,19 @@ declare(strict_types=1);
 
 namespace Bugo\Antlers\Runtime;
 
+/**
+ * Resolves template paths and holds the boundary every template lookup is
+ * contained in. There is no implicit root: a lookup can only reach the
+ * directory of the template being rendered and the configured view paths, so
+ * `{{ partial src="src/Engine.php" }}` cannot turn the working directory into
+ * a template tree.
+ *
+ * A top-level `Engine::renderFile()` is a direct call rather than a template
+ * action, so it goes through `resolveEntryTemplatePath()`: with nothing
+ * configured the entry file's own directory becomes the root for that render
+ * (via `pushTemplate()`), and once any root exists the boundary applies to it
+ * like everywhere else.
+ */
 final class TemplateLocator
 {
     /** @var string[] */
@@ -42,48 +55,55 @@ final class TemplateLocator
         return $this->templatePathStack[count($this->templatePathStack) - 1];
     }
 
+    public function resolveEntryTemplatePath(string $path): string
+    {
+        if ($path === '') {
+            return '';
+        }
+
+        if ($this->templateSearchRoots() !== []) {
+            return $this->resolveTemplatePath($path);
+        }
+
+        if (! $this->isAbsolutePath($path)) {
+            return '';
+        }
+
+        return $this->normalizeAbsolutePath($path) ?? '';
+    }
+
     public function resolveTemplatePath(string $path): string
     {
         if ($path === '') {
-            return $path;
+            return '';
         }
 
         $roots = $this->templateSearchRoots();
 
-        if ($this->isAbsolutePath($path)) {
-            if (! $this->hasConfiguredViewPaths()) {
-                return $path;
-            }
+        if ($roots === []) {
+            return '';
+        }
 
+        if ($this->isAbsolutePath($path)) {
             return $this->absolutePathWithinRoots($path, $roots) ?? '';
         }
 
-        $resolved = $this->hasConfiguredViewPaths()
-            ? $this->firstExistingSafeTemplatePath($roots, [$path])
-            : $this->firstExistingTemplatePath($roots, [$path]);
-
-        if ($resolved !== null) {
-            return $resolved;
-        }
-
-        if (! $this->hasConfiguredViewPaths()) {
-            return $this->joinPath($roots[0], $path);
-        }
-
-        return $this->resolvePathWithinRoot($roots[0], $path) ?? '';
+        return $this->firstExistingSafeTemplatePath($roots, [$path])
+            ?? ($this->resolvePathWithinRoot($roots[0], $path) ?? '');
     }
 
     public function resolveTemplateTagPath(string $path): string
     {
-        if ($path === '') {
-            return $path;
-        }
-
-        if ($this->isAbsolutePath($path)) {
+        if ($path === '' || $this->isAbsolutePath($path)) {
             return '';
         }
 
-        $roots    = $this->templateSearchRoots();
+        $roots = $this->templateSearchRoots();
+
+        if ($roots === []) {
+            return '';
+        }
+
         $resolved = $this->firstExistingSafeTemplatePath($roots, [$path]);
 
         if ($resolved !== null) {
@@ -121,7 +141,7 @@ final class TemplateLocator
         return $this->resolveTemplatePath($candidates[0]);
     }
 
-    /** @return non-empty-list<string> */
+    /** @return list<string> */
     private function templateSearchRoots(): array
     {
         $roots = [];
@@ -134,29 +154,7 @@ final class TemplateLocator
             $roots[] = $templateRoot;
         }
 
-        if ($roots === []) {
-            $roots[] = (string) getcwd();
-        }
-
         return array_values(array_unique($roots));
-    }
-
-    /**
-     * @param list<string> $roots
-     * @param list<string> $candidates
-     */
-    private function firstExistingTemplatePath(array $roots, array $candidates): ?string
-    {
-        foreach ($roots as $root) {
-            foreach ($candidates as $candidate) {
-                $resolved = $this->joinPath($root, $candidate);
-                if (is_file($resolved)) {
-                    return $resolved;
-                }
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -177,11 +175,17 @@ final class TemplateLocator
         return null;
     }
 
+    private function normalizeAbsolutePath(string $path): ?string
+    {
+        $real = realpath($path);
+
+        return $real !== false ? $real : $this->normalizePath($path);
+    }
+
     /** @param list<string> $roots */
     private function absolutePathWithinRoots(string $path, array $roots): ?string
     {
-        $real       = realpath($path);
-        $normalized = $real !== false ? $real : $this->normalizePath($path);
+        $normalized = $this->normalizeAbsolutePath($path);
 
         if ($normalized === null) {
             return null;
@@ -194,16 +198,6 @@ final class TemplateLocator
         }
 
         return null;
-    }
-
-    private function hasConfiguredViewPaths(): bool
-    {
-        return $this->viewPaths !== [];
-    }
-
-    private function joinPath(string $root, string $path): string
-    {
-        return rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
     }
 
     private function resolvePathWithinRoot(string $root, string $path): ?string

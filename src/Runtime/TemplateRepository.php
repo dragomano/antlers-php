@@ -35,9 +35,16 @@ final class TemplateRepository
      */
     public function renderFile(string $path, array $data, callable $renderer): string
     {
-        $resolved = $this->locator->resolveTemplatePath($path);
+        $resolved = $this->renderStack === []
+            ? $this->locator->resolveEntryTemplatePath($path)
+            : $this->locator->resolveTemplatePath($path);
+
         if ($resolved === '') {
-            throw new AntlersRuntimeException('Template file is outside the configured template roots: ' . $path);
+            throw new AntlersRuntimeException(sprintf(
+                'Template file is outside the configured template roots: %s. Set them with Engine::setViewPaths(), '
+                . 'or render an absolute path so its own directory becomes the root.',
+                $path,
+            ));
         }
 
         if (! is_file($resolved)) {

@@ -227,8 +227,10 @@ it('handles render file and view fallbacks, globals and strict path resolution',
 
     expect($processor->renderTemplate('{{ site }}'))->toBe('Docs')
         ->and(rtrim($processor->renderTemplateFile(renderFileFixturePath('once-file.antlers.html'))))->toBe('A')
-        ->and($processor->resolveTemplatePath('composer.json'))->toBe(getcwd() . DIRECTORY_SEPARATOR . 'composer.json')
-        ->and($processor->resolveTemplatePath('missing.file'))->toBe(getcwd() . DIRECTORY_SEPARATOR . 'missing.file')
+        // No view paths and no template on the stack: there is no root to resolve against.
+        ->and($processor->resolveTemplatePath('composer.json'))->toBe('')
+        ->and($processor->resolveTemplatePath('missing.file'))->toBe('')
+        ->and($processor->resolveTemplatePath(renderFileFixturePath('name.antlers.html')))->toBe('')
         ->and(fn(): string => $processor->renderView(''))->toThrow(AntlersRuntimeException::class, 'Template view not found')
         ->and(fn(): mixed => nodeProcessor(strict: true)->resolvePathValue('missing', []))
         ->toThrow(AntlersRuntimeException::class, 'Undefined variable: "missing"');

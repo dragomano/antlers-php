@@ -57,6 +57,55 @@ it('blocks renderFile outside configured template roots', function (): void {
         ->toThrow(AntlersRuntimeException::class, 'outside the configured template roots');
 });
 
+it('does not read the working directory as a template root', function (): void {
+    // The file is right there, one `getcwd()` away: nothing may reach it while
+    // no template root is configured.
+    expect(is_file('composer.json'))->toBeTrue();
+
+    expect(engine()->render('[{{ partial src="composer.json" }}]'))->toBe('[]')
+        ->and(engine()->render('[{{ svg src="composer.json" }}]'))->toBe('[]')
+        ->and(engine()->render('[{{ layout src="composer.json" }}]'))->toBe('[]')
+        ->and(fn(): string => engine()->setStrictMode(true)->render('{{ partial src="composer.json" }}'))
+        ->toThrow(AntlersRuntimeException::class, 'Partial not found: "composer.json"')
+        ->and(fn(): string => engine()->setStrictMode(true)->render('{{ layout src="composer.json" }}'))
+        ->toThrow(AntlersRuntimeException::class, 'Layout not found: "composer.json"');
+});
+
+it('keeps a rendered file and its partials inside the file directory', function (): void {
+    $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'antlers-entry-' . bin2hex(random_bytes(4));
+    mkdir($root . DIRECTORY_SEPARATOR . 'partials', recursive: true);
+    $page   = $root . DIRECTORY_SEPARATOR . 'page.html';
+    $escape = $root . DIRECTORY_SEPARATOR . 'escape.html';
+    $card   = $root . DIRECTORY_SEPARATOR . 'partials' . DIRECTORY_SEPARATOR . 'card.html';
+    $secret = dirname($root) . DIRECTORY_SEPARATOR . basename($root) . '-secret.html';
+    file_put_contents($page, 'page[{{ partial src="partials/card.html" }}]');
+    file_put_contents($escape, '[{{ partial src="../' . basename($secret) . '" }}]');
+    file_put_contents($card, 'CARD');
+    file_put_contents($secret, 'SECRET');
+
+    try {
+        $e = engine();
+
+        expect($e->renderFile($page))->toBe('page[CARD]')
+            ->and($e->renderFile($escape))->toBe('[]')
+            // A later top-level render may name another directory: the adopted
+            // root lives as long as the render, so nothing is carried over.
+            ->and($e->renderFile($card))->toBe('CARD');
+    } finally {
+        unlink($page);
+        unlink($escape);
+        unlink($card);
+        unlink($secret);
+        rmdir($root . DIRECTORY_SEPARATOR . 'partials');
+        rmdir($root);
+    }
+});
+
+it('blocks a relative entry path when no view paths are configured', function (): void {
+    expect(fn(): string => engine()->renderFile('page.html'))
+        ->toThrow(AntlersRuntimeException::class, 'outside the configured template roots');
+});
+
 it('renders a view by name from configured view paths', function (): void {
     $e = engine();
     $e->setViewPaths(renderViewFixture('views'));

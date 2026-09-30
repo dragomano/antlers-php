@@ -146,7 +146,13 @@ final class CoreTags
             ['template_content' => self::string($slotData['slot'])],
         );
 
-        return $processor->renderTemplateFile(self::fallbackTemplatePath($processor, $paths), $layoutData);
+        $layout = self::fallbackTemplatePath($processor, $paths);
+
+        // A layout outside the template roots resolves to an empty path; report
+        // it as a missing layout instead of handing "" to the renderer.
+        return $layout !== ''
+            ? $processor->renderTemplateFile($layout, $layoutData)
+            : $processor->fail(sprintf('Layout not found: "%s"', implode('", "', $paths)));
     }
 
     /**
