@@ -117,6 +117,13 @@ it('supports partial slots and named slots', function (): void {
         ->toBe('<div class="modal"><div class="modal-header"><h1>Hello</h1></div><div class="modal-content"><p>Body copy</p></div></div>');
 });
 
+it('resolves slot definitions whatever casing the template spells them with', function (): void {
+    $wrapper = fixturePath('partial/slots/wrapper-upper.antlers.html');
+
+    expect(rtrim(engine()->renderFile($wrapper, ['title' => 'Hello', 'body' => 'Body copy'])))
+        ->toBe('<div class="modal"><div class="modal-header"><h1>Hello</h1></div><div class="modal-content"><p>Body copy</p></div></div>');
+});
+
 it('supports layout rendering with template_content', function (): void {
     $child = fixturePath('layout/basic/child.antlers.html');
 

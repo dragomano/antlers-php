@@ -66,7 +66,7 @@ final readonly class SlotRenderer
             return null;
         }
 
-        if (! $parsed instanceof TagNode || $parsed->name !== 'slot' || $parsed->children === []) {
+        if (! $parsed instanceof TagNode || strtolower($parsed->name) !== 'slot' || $parsed->children === []) {
             return null;
         }
 

@@ -41,6 +41,23 @@ it('reports registered tags', function (): void {
         ->and($registry->has('missing'))->toBeFalse();
 });
 
+it('normalises tag names to lowercase on register and lookup', function (): void {
+    $registry = new TagRegistry();
+    $registry->register('myBox', static fn(): string => 'ok');
+
+    expect($registry->has('myBox'))->toBeTrue()
+        ->and($registry->has('MYBOX'))->toBeTrue()
+        ->and($registry->handle('MYBOX', 'index', [], [], bareNodeProcessor($registry)))->toBe('ok');
+});
+
+it('keeps one tag per name across registration casings', function (): void {
+    $registry = new TagRegistry();
+    $registry->register('myBox', static fn(): string => 'first');
+    $registry->register('mybox', static fn(): string => 'second');
+
+    expect($registry->handle('myBox', 'index', [], [], bareNodeProcessor($registry)))->toBe('second');
+});
+
 it('throws a runtime exception when handling an unregistered tag', function (): void {
     $registry = new TagRegistry();
 

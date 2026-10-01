@@ -161,3 +161,30 @@ it('supports shorthand dynamic tag parameters with :$name syntax', function (): 
         'class' => 'hero',
     ]))->toBe('entry-1|hero');
 });
+
+it('resolves every tag form whatever the template and registration case', function (string $template, string $expected): void {
+    foreach (['myBox', 'mybox'] as $registered) {
+        $engine = engine();
+        $engine->addTag(
+            $registered,
+            function (array $params, array $data, NodeProcessor $proc, string $method, array $children): string {
+                if ($children !== []) {
+                    return $proc->renderFragment($children);
+                }
+
+                return $params['id'] ?? ($method !== 'index' ? 'm:' . $method : 'ok');
+            },
+        );
+
+        expect($engine->render($template))->toBe($expected);
+    }
+})->with([
+    'plain form'            => ['{{ myBox }}', 'ok'],
+    'with parameters'       => ['{{ myBox id="7" }}', '7'],
+    'paired block'          => ['{{ myBox }}X{{ /myBox }}', 'X'],
+    'forced with %'         => ['{{ %myBox }}', 'ok'],
+    'sub-expression'        => ['{{ {myBox} }}', 'ok'],
+    'tag method'            => ['{{ myBox:method }}', 'm:method'],
+    'method case untouched' => ['{{ myBox:Method }}', 'm:Method'],
+    'uppercase spelling'    => ['{{ MYBOX }}', 'ok'],
+]);

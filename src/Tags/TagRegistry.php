@@ -13,14 +13,16 @@ final class TagRegistry
     /** @var array<string, TagInterface|callable> */
     private array $tags = [];
 
+    // The registry and every lookup live in lowercase: template spelling and
+    // registration casing must not decide which forms resolve.
     public function register(string $name, TagInterface|callable $handler): void
     {
-        $this->tags[$name] = $handler;
+        $this->tags[strtolower($name)] = $handler;
     }
 
     public function has(string $name): bool
     {
-        return isset($this->tags[$name]);
+        return isset($this->tags[strtolower($name)]);
     }
 
     /**
@@ -36,6 +38,8 @@ final class TagRegistry
         NodeProcessor $processor,
         array $children = [],
     ): mixed {
+        $name = strtolower($name);
+
         $handler = $this->tags[$name]
             ?? throw new AntlersRuntimeException(sprintf('Unknown tag: "%s"', $name));
 

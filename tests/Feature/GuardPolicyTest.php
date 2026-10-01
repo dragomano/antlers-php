@@ -195,6 +195,18 @@ it('throws for guarded tags in strict mode', function (): void {
         ->toThrow(AntlersRuntimeException::class, 'Guarded tag: "dump"');
 });
 
+it('guards a tag whatever casing the template spells it with', function (): void {
+    $engine = engine()
+        ->setStrictMode(true)
+        ->setDebug(true)
+        ->setGuardPolicy(new GuardPolicy(
+            tags: ['dump'],
+        ));
+
+    expect(fn(): string => $engine->render('{{ DUMP value=name }}', ['name' => 'Alice']))
+        ->toThrow(AntlersRuntimeException::class, 'Guarded tag: "DUMP"');
+});
+
 it('returns the original value for guarded modifiers in lenient mode', function (): void {
     $engine = engine()->setGuardPolicy(new GuardPolicy(
         modifiers: ['upper'],

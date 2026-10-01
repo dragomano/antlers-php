@@ -28,11 +28,13 @@ final class TagInvoker
     /** @param array<string, mixed> $scope */
     public function call(TagNode $node, array $scope): mixed
     {
-        if (! $this->tags->has($node->name)) {
+        $name = strtolower($node->name);
+
+        if (! $this->tags->has($name)) {
             return $this->options->fail(sprintf('Unknown tag: "%s"', $node->name));
         }
 
-        if ($this->options->guardPolicy->guardsTag($node->name)) {
+        if ($this->options->guardPolicy->guardsTag($name)) {
             return $this->options->fail(sprintf('Guarded tag: "%s"', $node->name));
         }
 
@@ -45,11 +47,11 @@ final class TagInvoker
             static fn(mixed $value): bool => ! $value instanceof VoidValue,
         );
 
-        $this->pushContext($node);
+        $this->pushContext($name, $node);
 
         try {
             return ($this->handle)(
-                $node->name,
+                $name,
                 $node->method,
                 $parameters,
                 $scope,
@@ -99,10 +101,10 @@ final class TagInvoker
         return $context['signature'];
     }
 
-    private function pushContext(TagNode $node): void
+    private function pushContext(string $name, TagNode $node): void
     {
         $this->contexts[] = [
-            'name'      => $node->name,
+            'name'      => $name,
             'method'    => $node->method,
             'line'      => $node->line,
             'signature' => null,
