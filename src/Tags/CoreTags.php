@@ -50,6 +50,14 @@ final class CoreTags
         }
     }
 
+    /** The `<pre>` dump view shared by the {{ dump }} tag and the dump modifier. */
+    public static function dumpView(mixed $value): string
+    {
+        $exported = var_export($value, true);
+
+        return '<pre>' . htmlspecialchars($exported, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</pre>';
+    }
+
     /**
      * @param array<string, mixed> $params
      * @param array<string, mixed> $data
@@ -446,9 +454,7 @@ final class CoreTags
             return '';
         }
 
-        $exported = var_export($params['value'] ?? $params['var'] ?? $data, true);
-
-        return '<pre>' . htmlspecialchars($exported, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</pre>';
+        return self::dumpView($params['value'] ?? $params['var'] ?? $data);
     }
 
     /**

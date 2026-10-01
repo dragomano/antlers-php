@@ -13,6 +13,7 @@ final class UtilityModifiers
         'is_array',
         'is_numeric',
         'type_of',
+        'dump',
         'md5',
         'format',
         'to_json',

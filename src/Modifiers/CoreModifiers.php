@@ -9,6 +9,7 @@ use Bugo\Antlers\Runtime\PathDataManager;
 use Bugo\Antlers\Runtime\RuntimeOptions;
 use Bugo\Antlers\Runtime\ValueCoercion;
 use Bugo\Antlers\Runtime\ValueResult;
+use Bugo\Antlers\Tags\CoreTags;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Generator;
@@ -352,6 +353,9 @@ final class CoreModifiers
         $registry->register('is_numeric', static fn(mixed $v): bool => is_numeric($v));
 
         $registry->register('type_of', static fn(mixed $v): string => gettype($v));
+
+        $registry->register('dump', static fn(mixed $v): string
+            => $options->debug ? CoreTags::dumpView($v) : '');
 
         $registry->register('md5', static fn(mixed $v): string => md5(self::string($v)));
 

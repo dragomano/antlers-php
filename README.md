@@ -409,6 +409,7 @@ Supported official subset:
 - `decode`
 - `deslugify`
 - `divide`
+- `dump`
 - `ends_with`
 - `ensure_left`
 - `ensure_right`
@@ -609,6 +610,7 @@ $engine->setDateModifiers(); // registers `timestamp` and `ago`
 | `is_array` | Check if value is an array | `{{ items \| is_array }}` |
 | `is_numeric` | Check if value is numeric | `{{ value \| is_numeric }}` |
 | `type_of` | Return the native value type | `{{ value \| type_of }}` |
+| `dump` | Debug dump in a `<pre>` block (silent unless debug mode is on) | `{{ value \| dump }}` |
 | `md5` | MD5 hash | `{{ email \| md5 }}` |
 | `to_json` | JSON encode (`pretty` for indentation) | `{{ value \| to_json }}` |
 | `to_qs` | Array → query string | `{{ value \| to_qs }}` |
@@ -749,9 +751,9 @@ $engine->render("<h1>{{ title }}</h1>\n<p>{{ missing }}</p>", ['title' => 'Home'
 The line is the innermost `{{ }}` that can be blamed, not the block around it: a failure inside
 `{{ if }}` or a loop body reports its own line.
 
-`??` and `???` never throw for an undefined left side, in either mode. The `dump` tag is not
-affected either: an empty result there means debug mode is off, which is a setting rather than
-a failure.
+`??` and `???` never throw for an undefined left side, in either mode. The `dump` tag and the
+`dump` modifier are not affected either: an empty result there means debug mode is off, which is
+a setting rather than a failure.
 
 ### Object Data
 
@@ -789,14 +791,15 @@ foreign exception escaping `render()`.
 
 ### Debug Mode
 
-The `dump` tag stays silent while debug mode is off, so a stray `{{ dump }}` cannot leak the
-template scope in production. Wire it to your own `APP_DEBUG` equivalent:
+The `dump` tag and the `dump` modifier stay silent while debug mode is off, so a stray
+`{{ dump }}` cannot leak the template scope in production. Wire it to your own `APP_DEBUG` equivalent:
 
 ```php
 $engine->setDebug(true);
 
 echo $engine->render('{{ dump }}');            // dumps the current scope
 echo $engine->render('{{ dump value=user }}'); // dumps a single value
+echo $engine->render('{{ user | dump }}');     // dumps a piped value, chains welcome
 ```
 
 Inside a loop it dumps that iteration's scope. Use `force="true"` to dump regardless of the setting:

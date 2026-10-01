@@ -130,6 +130,15 @@ it('registers the desirable modifiers from the spec', function (): void {
     }
 });
 
+it('gates the dump modifier behind debug mode', function (): void {
+    $options = new RuntimeOptions();
+    $options->debug = true;
+
+    expect(coreModifierRegistry()->apply('dump', ['name' => 'Alice'], [], []))->toBe('')
+        ->and(coreModifierRegistry($options)->apply('dump', ['name' => 'Alice'], [], []))
+        ->toContain('&apos;name&apos; =&gt; &apos;Alice&apos;');
+});
+
 it('returns fallback values for non-iterable desirable modifiers', function (): void {
     $registry = coreModifierRegistry();
     $value    = new stdClass();
